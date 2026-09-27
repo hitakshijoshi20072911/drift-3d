@@ -145,6 +145,21 @@ python -c "from huggingface_hub import snapshot_download; snapshot_download('dep
 This avoids `WinError 1314` on machines where Developer Mode or administrator
 symlink privileges are not enabled.
 
+If `git pull` reports that `frozen_ml/3d/__init__.py` is an untracked file that
+would be overwritten, the previous update was downloaded but not merged. The
+file is now tracked by the repository, so remove only that identical untracked
+copy and pull again before reinstalling:
+
+```powershell
+Remove-Item -Force "frozen_ml/3d/__init__.py"
+git pull origin main
+python -m pip install -e ".[figures]"
+```
+
+Do not run the benchmark until `git pull` finishes successfully. Otherwise the
+old runner can create `input_images/` and `run_report.json` without the newer
+import and artifact fixes.
+
 ```powershell
 git pull origin main
 py -3.11 -m venv .venv
@@ -182,6 +197,12 @@ outputs/benchmarks/
 ├── test6/...
 └── test7/...
 ```
+
+`input_images/` is created during frame extraction. The model must finish
+successfully before `scene.glb`, `scene.ply`,
+`exports/mini_npz/results.npz`, and `depth_vis/` are written. If only
+`input_images/` and `run_report.json` exist, open `run_report.json` and inspect
+`error` and `error_traceback`; the run did not reach inference or export.
 
 After all three runs finish, generate the documentation package:
 

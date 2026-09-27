@@ -11,8 +11,11 @@ def export_baseline(prediction: Any, output_dir: str | Path) -> dict[str, str]:
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
-    # Keep GLB and mini-NPZ generation on the vendored dispatcher so the
-    # benchmark uses the same export semantics as the existing validated runs.
+    import numpy as np
+
+    # The vendored mini-NPZ helper is asynchronous. Use its synchronous-safe
+    # GLB/depth-visualization path, then write the small mini-NPZ here so the
+    # benchmark never reports success before all artifacts exist.
     try:
         from third_party.depth_anything_3.utils.export import export
     except ModuleNotFoundError as exc:
@@ -20,10 +23,20 @@ def export_baseline(prediction: Any, output_dir: str | Path) -> dict[str, str]:
             raise
         from depth_anything_3.utils.export import export
 
-    export(prediction, "glb-mini_npz", str(output_path))
+    export(prediction, "glb", str(output_path), export_depth_vis=True)
+
+    npz_path = output_path / "exports" / "mini_npz" / "results.npz"
+    npz_path.parent.mkdir(parents=True, exist_ok=True)
+    mini_npz = {"depth": np.round(prediction.depth, 8)}
+    if prediction.conf is not None:
+        mini_npz["conf"] = np.round(prediction.conf, 2)
+    if prediction.extrinsics is not None:
+        mini_npz["extrinsics"] = prediction.extrinsics
+    if prediction.intrinsics is not None:
+        mini_npz["intrinsics"] = prediction.intrinsics
+    np.savez_compressed(npz_path, **mini_npz)
 
     try:
-        import numpy as np
         import trimesh
     except ImportError as exc:
         raise RuntimeError("PLY export requires the declared numpy and trimesh dependencies") from exc
@@ -38,13 +51,22 @@ def export_baseline(prediction: Any, output_dir: str | Path) -> dict[str, str]:
     ply_path = output_path / "scene.ply"
     trimesh.PointCloud(vertices=points, colors=colors).export(ply_path)
 
-    npz_path = output_path / "exports" / "mini_npz" / "results.npz"
-    return {
+    artifacts = {
         "glb": str(output_path / "scene.glb"),
         "ply": str(ply_path),
         "npz": str(npz_path),
         "depth_vis": str(output_path / "depth_vis"),
     }
+    missing = [
+        path
+        for path in (Path(artifacts["glb"]), Path(artifacts["ply"]), Path(artifacts["npz"]))
+        if not path.is_file()
+    ]
+    if not Path(artifacts["depth_vis"]).is_dir():
+        missing.append(Path(artifacts["depth_vis"]))
+    if missing:
+        raise RuntimeError("Benchmark export incomplete; missing: " + ", ".join(map(str, missing)))
+    return artifacts
 
 
 def _depth_to_world_points(depth, intrinsics, extrinsics, images, conf, max_points: int = 1_000_000):
