@@ -82,7 +82,7 @@ pip install -e ".[all]"   # all optional capabilities
 ### Reconstruct example images
 
 ```bash
-export MODEL_DIR=depth-anything/DA3NESTED-GIANT-LARGE
+export MODEL_DIR=depth-anything/DA3-LARGE-1.1
 export GALLERY_DIR=workspace/gallery
 mkdir -p "$GALLERY_DIR"
 
@@ -124,7 +124,7 @@ python -m driftx benchmark \
 ```
 
 Optional controls include `--model`, `--device auto|cpu|cuda`,
-`--sample-fps`, and `--process-res`. The report uses **`"not measured"`** for
+`--sample-fps`, `--max-frames`, and `--process-res`. The report uses **`"not measured"`** for
 values unavailable because of missing dependencies, hardware, or failed
 inference; it never substitutes an invented accuracy or improvement number.
 
@@ -132,14 +132,15 @@ inference; it never substitutes an invented accuracy or improvement number.
 
 Run these commands in the Windsurf terminal from the repository root. The
 checkpoint name used by this repository for the requested **DA3 Large 1.1
-safe version** is `depth-anything/DA3NESTED-GIANT-LARGE-1.1`. If the weights
+safe version** is `depth-anything/DA3-LARGE-1.1`. Do not use the
+`DA3NESTED-GIANT-LARGE-1.1` checkpoint for this benchmark. If the weights
 are already downloaded locally, replace that value with the local checkpoint
 folder, for example `models\DA3_LARGE_1.1_SAFE`. On Windows, download into
 that folder with `local_dir` rather than relying on the Hugging Face cache's
 symlinks:
 
 ```powershell
-python -c "from huggingface_hub import snapshot_download; snapshot_download('depth-anything/DA3NESTED-GIANT-LARGE-1.1', local_dir='models/DA3_LARGE_1.1_SAFE')"
+python -c "from huggingface_hub import snapshot_download; snapshot_download('depth-anything/DA3-LARGE-1.1', local_dir='models/DA3_LARGE_1.1_SAFE')"
 ```
 
 This avoids `WinError 1314` on machines where Developer Mode or administrator
@@ -170,20 +171,20 @@ python -m pip install -e ".[figures]"
 # Required preflight: this must print a path inside the active .venv.
 python -c "import depth_anything_3; print(depth_anything_3.__file__)"
 
-$env:MODEL_DIR = "depth-anything/DA3NESTED-GIANT-LARGE-1.1"
+$env:MODEL_DIR = "models\DA3_LARGE_1.1_SAFE"
 $env:DEVICE = "cuda"        # use "cpu" only if CUDA is unavailable
 
 python -m driftx benchmark --video "input/test3.mp4" `
   --output "outputs/benchmarks/test3" --model $env:MODEL_DIR `
-  --device $env:DEVICE --sample-fps 1.0 --process-res 504
+  --device $env:DEVICE --sample-fps 1.0 --max-frames 16 --process-res 504
 
 python -m driftx benchmark --video "input/test6.mp4" `
   --output "outputs/benchmarks/test6" --model $env:MODEL_DIR `
-  --device $env:DEVICE --sample-fps 1.0 --process-res 504
+  --device $env:DEVICE --sample-fps 1.0 --max-frames 16 --process-res 504
 
 python -m driftx benchmark --video "input/test7.mp4" `
   --output "outputs/benchmarks/test7" --model $env:MODEL_DIR `
-  --device $env:DEVICE --sample-fps 1.0 --process-res 504
+  --device $env:DEVICE --sample-fps 1.0 --max-frames 16 --process-res 504
 ```
 
 The three videos must exist in your local checkout; large video files are not

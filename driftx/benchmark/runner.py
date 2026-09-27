@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import platform
 import time
 import traceback
@@ -14,7 +15,29 @@ def _not_measured() -> str:
     return "not measured"
 
 
-def _base_report(video: str, output: str, model: str, device: str, sample_fps: float) -> dict[str, Any]:
+def _validate_large_model(model: str) -> None:
+    """Reject memory-heavy Giant/Nested checkpoints for this benchmark."""
+    model_text = str(model).lower()
+    if "giant" in model_text or "nested" in model_text:
+        raise ValueError(
+            "This benchmark is configured for DA3 Large 1.1, not a Giant/Nested checkpoint. "
+            "Use depth-anything/DA3-LARGE-1.1 or a local copy downloaded from that model."
+        )
+    config_path = Path(model).expanduser() / "config.json"
+    if config_path.is_file():
+        try:
+            config = json.loads(config_path.read_text(encoding="utf-8"))
+            model_name = str(config.get("model_name", "")).lower()
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ValueError(f"Cannot read model configuration: {config_path}") from exc
+        if model_name and ("giant" in model_name or "nested" in model_name):
+            raise ValueError(
+                f"Local checkpoint is {model_name!r}, not DA3 Large 1.1. "
+                "Download depth-anything/DA3-LARGE-1.1 into a new folder."
+            )
+
+
+def _base_report(video: str, output: str, model: str, device: str, sample_fps: float, max_frames: int | None) -> dict[str, Any]:
     repo_root = Path(__file__).resolve().parents[2]
     reference_dir = repo_root / "outputs" / "large_576_dense"
     return {
@@ -25,6 +48,7 @@ def _base_report(video: str, output: str, model: str, device: str, sample_fps: f
         "model_variant": model,
         "device": device,
         "requested_sampled_fps": sample_fps,
+        "max_frames": max_frames if max_frames is not None else "all",
         "source_fps": _not_measured(),
         "source_frames": _not_measured(),
         "sampled_fps": _not_measured(),
@@ -51,19 +75,23 @@ def _base_report(video: str, output: str, model: str, device: str, sample_fps: f
     }
 
 
-def run_benchmark(video: str, output: str, model: str, device: str, sample_fps: float, process_res: int) -> dict[str, Any]:
+def run_benchmark(video: str, output: str, model: str, device: str, sample_fps: float, process_res: int, max_frames: int | None = 16) -> dict[str, Any]:
     """Run a baseline and always persist ``run_report.json``."""
     output_path = Path(output).expanduser().resolve()
     output_path.mkdir(parents=True, exist_ok=True)
-    report = _base_report(video, output_path, model, device, sample_fps)
+    report = _base_report(video, output_path, model, device, sample_fps, max_frames)
     report_path = output_path / "run_report.json"
     started = time.perf_counter()
 
     try:
+        # Set this before importing torch; it reduces fragmentation on Windows
+        # without lowering model quality or output resolution.
+        os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+        _validate_large_model(model)
         from driftx.ingest import extract_video_frames
 
         extraction_started = time.perf_counter()
-        info, frame_paths = extract_video_frames(video, output_path, sample_fps)
+        info, frame_paths = extract_video_frames(video, output_path, sample_fps, max_frames)
         report["frame_extraction_time_seconds"] = time.perf_counter() - extraction_started
         report.update(
             {

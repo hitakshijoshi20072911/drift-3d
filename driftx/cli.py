@@ -23,14 +23,20 @@ def build_parser() -> argparse.ArgumentParser:
     benchmark.add_argument("--output", required=True, help="Directory for frames, exports, and run_report.json.")
     benchmark.add_argument(
         "--model",
-        default="depth-anything/DA3NESTED-GIANT-LARGE-1.1",
-        help="Pretrained model variant or local model directory.",
+        default="depth-anything/DA3-LARGE-1.1",
+        help="DA3 Large 1.1 model ID or local model directory (Giant/Nested checkpoints are rejected).",
     )
     benchmark.add_argument(
         "--device", default="auto", help="Inference device: auto, cpu, or cuda (default: auto)."
     )
     benchmark.add_argument(
         "--sample-fps", type=float, default=1.0, help="Video sampling rate (default: 1 FPS)."
+    )
+    benchmark.add_argument(
+        "--max-frames",
+        type=int,
+        default=16,
+        help="Maximum evenly spaced frames sent to one GPU batch (default: 16; use 0 for all).",
     )
     benchmark.add_argument(
         "--process-res", type=int, default=504, help="Vendor preprocessing resolution (default: 504)."
@@ -51,6 +57,7 @@ def main(argv: list[str] | None = None) -> int:
             model=args.model,
             device=args.device,
             sample_fps=args.sample_fps,
+            max_frames=None if args.max_frames == 0 else args.max_frames,
             process_res=args.process_res,
         )
         print(f"DRIFTX benchmark status: {report['status']}")

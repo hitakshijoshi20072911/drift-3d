@@ -15,10 +15,17 @@ class VideoInfo:
     frame_interval: int
 
 
-def extract_video_frames(video: str | Path, output_dir: str | Path, sample_fps: float) -> tuple[VideoInfo, list[str]]:
+def extract_video_frames(
+    video: str | Path,
+    output_dir: str | Path,
+    sample_fps: float,
+    max_frames: int | None = 16,
+) -> tuple[VideoInfo, list[str]]:
     """Extract deterministic frames using the same interval rule as the vendor CLI."""
     if sample_fps <= 0:
         raise ValueError("sample_fps must be greater than zero")
+    if max_frames is not None and max_frames <= 0:
+        raise ValueError("max_frames must be greater than zero or None")
 
     try:
         import cv2
@@ -63,6 +70,22 @@ def extract_video_frames(video: str | Path, output_dir: str | Path, sample_fps: 
 
     if not frame_paths:
         raise RuntimeError(f"No frames extracted from video: {video_path}")
+
+    if max_frames is not None and len(frame_paths) > max_frames:
+        # Preserve coverage across the whole video rather than taking only the
+        # first frames. The DA3 Large model sees one multi-view batch, so this
+        # cap is the primary high-resolution VRAM safeguard.
+        keep_indices = {
+            round(i * (len(frame_paths) - 1) / (max_frames - 1))
+            for i in range(max_frames)
+        } if max_frames > 1 else {len(frame_paths) // 2}
+        selected = []
+        for index, frame_path in enumerate(frame_paths):
+            if index in keep_indices:
+                selected.append(frame_path)
+            else:
+                Path(frame_path).unlink(missing_ok=True)
+        frame_paths = selected
 
     return (
         VideoInfo(
