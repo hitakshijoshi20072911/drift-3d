@@ -25,6 +25,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="DA3 Large 1.1 model ID or local checkpoint folder; Giant/Nested are rejected.",
     )
     benchmark.add_argument("--device", default="auto", help="Inference device: auto, cpu, or cuda (default: auto).")
+    benchmark.add_argument(
+        "--reconstruction-mode", choices=("baseline", "gaussian", "both"), default="baseline",
+        help="Export the GLB baseline, DA3 Gaussian PLY/video, or both (default: baseline).",
+    )
     benchmark.add_argument("--profile", choices=("smoke", "balanced", "quality"), default="smoke",
                            help="Starting settings profile. Explicit numeric options override profile values.")
     benchmark.add_argument("--sample-fps", type=float, default=None,
@@ -68,6 +72,7 @@ def main(argv: list[str] | None = None) -> int:
             profile=args.profile,
             precision=args.precision,
             auto_memory=args.auto_memory,
+            reconstruction_mode=args.reconstruction_mode,
         )
         report_path = Path(args.output).expanduser().resolve() / "run_report.json"
         print(f"DRIFTX benchmark status: {report['status']}")

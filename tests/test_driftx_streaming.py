@@ -23,6 +23,64 @@ from driftx.export.baseline import _depth_to_world_points
 
 
 class StreamingTests(unittest.TestCase):
+    def test_gaussian_adapter_delegates_to_vendored_exporters(self):
+        from driftx.reconstruction.gaussian import run_gaussian_reconstruction
+
+        export_module = types.ModuleType("depth_anything_3.utils.export.gs")
+
+        def fake_ply(prediction, export_dir):
+            path = Path(export_dir) / "gs_ply" / "0000.ply"
+            path.parent.mkdir(parents=True)
+            path.write_bytes(b"ply\n")
+
+        def fake_video(prediction, export_dir, **kwargs):
+            path = Path(export_dir) / "gs_video" / "gaussian_preview.mp4"
+            path.parent.mkdir(parents=True)
+            path.write_bytes(b"video\n")
+
+        export_module.export_to_gs_ply = fake_ply
+        export_module.export_to_gs_video = fake_video
+        fake_root = types.ModuleType("depth_anything_3")
+        fake_utils = types.ModuleType("depth_anything_3.utils")
+        fake_utils.__path__ = []
+        names = ("depth_anything_3", "depth_anything_3.utils", "depth_anything_3.utils.export.gs")
+        previous = {name: sys.modules.get(name) for name in names}
+        sys.modules.update({
+            "depth_anything_3": fake_root,
+            "depth_anything_3.utils": fake_utils,
+            "depth_anything_3.utils.export.gs": export_module,
+        })
+        try:
+            prediction = SimpleNamespace(
+                depth=np.ones((1, 2, 2), dtype=np.float32),
+                conf=np.ones((1, 2, 2), dtype=np.float32),
+                extrinsics=np.eye(4, dtype=np.float32)[None],
+                intrinsics=np.eye(3, dtype=np.float32)[None],
+                processed_images=np.zeros((1, 2, 2, 3), dtype=np.uint8),
+                gaussians=object(),
+            )
+
+            class FakeModel:
+                def inference(self, **kwargs):
+                    self.kwargs = kwargs
+                    return prediction
+
+            with tempfile.TemporaryDirectory() as tmp:
+                model = FakeModel()
+                result, artifacts = run_gaussian_reconstruction(
+                    model, ["frame.png"], tmp, process_res=504
+                )
+                self.assertIs(result, prediction)
+                self.assertTrue(Path(artifacts["gaussian_ply"]).is_file())
+                self.assertTrue(Path(artifacts["gaussian_preview"]).is_file())
+                self.assertTrue(model.kwargs["infer_gs"])
+        finally:
+            for name, module in previous.items():
+                if module is None:
+                    sys.modules.pop(name, None)
+                else:
+                    sys.modules[name] = module
+
     def test_frame_metadata_uses_portable_relative_paths(self):
         from driftx.benchmark.runner import _write_frame_metadata
 

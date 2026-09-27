@@ -69,6 +69,7 @@ def _base_report(video, output, model, device, profile, sample_fps, max_frames, 
         "output": str(Path(output).expanduser().resolve()),
         "model_variant": model,
         "device": device,
+        "reconstruction_mode": "baseline",
         "profile": profile,
         "requested_sample_fps": sample_fps,
         "sample_fps": sample_fps,
@@ -108,6 +109,7 @@ def _base_report(video, output, model, device, profile, sample_fps, max_frames, 
             "DA3_inference": 0.0, "chunk_alignment": 0.0,
             "point_fusion": 0.0, "GLB_export": 0.0,
             "PLY_export": 0.0, "NPZ_export": 0.0,
+            "Gaussian_inference": 0.0, "Gaussian_export": 0.0,
         },
         "alignment": [],
         "artifacts": {},
@@ -317,8 +319,11 @@ def run_benchmark(
     profile: str = "smoke",
     precision: str = "auto",
     auto_memory: bool = True,
+    reconstruction_mode: str = "baseline",
 ) -> dict[str, Any]:
-    """Run a reproducible benchmark, staging each DA3 inference window on CPU."""
+    """Run baseline GLB, DA3 Gaussian, or both reconstruction paths."""
+    if reconstruction_mode not in {"baseline", "gaussian", "both"}:
+        raise ValueError("reconstruction_mode must be one of: baseline, gaussian, both")
     sample_fps, max_frames, process_res, requested_chunk, requested_overlap = _resolve_options(
         profile, sample_fps, max_frames, process_res, chunk_size, chunk_overlap
     )
@@ -328,6 +333,7 @@ def run_benchmark(
         video, output_path, model, device, profile, sample_fps, max_frames,
         process_res, requested_chunk, requested_overlap, precision,
     )
+    report["reconstruction_mode"] = reconstruction_mode
     report_path = output_path / "run_report.json"
     started = time.perf_counter()
     final_tmp = None
@@ -372,40 +378,64 @@ def run_benchmark(
         if actual_device.startswith("cuda") and torch.cuda.is_available():
             torch.cuda.reset_peak_memory_stats(actual_device)
 
-        while True:
-            try:
-                report["frames_processed"] = 0
-                result, chunks, alignments, gpu_samples, final_tmp = _run_stream_attempt(
-                    model_obj, torch, frame_paths, info.source_frame_ids, output_path,
-                    actual_device, process_res, final_precision, active_chunk, active_overlap,
-                    info.duration_seconds, report["stage_timings_seconds"], started,
-                    progress_callback=lambda processed: report.__setitem__("frames_processed", processed),
-                )
-                report["num_chunks"] = len(chunks)
-                report["alignment"] = alignments
-                if gpu_samples:
-                    report["mean_gpu_memory_mb"] = round(sum(gpu_samples) / len(gpu_samples), 2)
-                break
-            except Exception as exc:
-                if not is_cuda_oom(exc, torch):
-                    raise
-                retry_size = oom_fallback_size(active_chunk)
-                if retry_size is None or retry_size <= active_overlap:
-                    raise RuntimeError(
-                        f"CUDA OOM persisted at chunk_size={active_chunk}; no safe smaller window remains. "
-                        "Lower process resolution or close other GPU applications."
-                    ) from exc
-                report["cuda_oom_retries"] += 1
-                print(f"CUDA OOM at chunk_size={active_chunk}; retrying the full sequence with chunk_size={retry_size}", flush=True)
-                active_chunk = retry_size
-                active_overlap = min(active_overlap, active_chunk - 1)
-                report["chunk_size"] = active_chunk
-                report["chunk_overlap"] = active_overlap
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
-                gc.collect()
-                shutil.rmtree(output_path / ".driftx_stream_tmp", ignore_errors=True)
+        if reconstruction_mode in {"baseline", "both"}:
+            while True:
+                try:
+                    report["frames_processed"] = 0
+                    result, chunks, alignments, gpu_samples, final_tmp = _run_stream_attempt(
+                        model_obj, torch, frame_paths, info.source_frame_ids, output_path,
+                        actual_device, process_res, final_precision, active_chunk, active_overlap,
+                        info.duration_seconds, report["stage_timings_seconds"], started,
+                        progress_callback=lambda processed: report.__setitem__("frames_processed", processed),
+                    )
+                    report["num_chunks"] = len(chunks)
+                    report["alignment"] = alignments
+                    if gpu_samples:
+                        report["mean_gpu_memory_mb"] = round(sum(gpu_samples) / len(gpu_samples), 2)
+                    break
+                except Exception as exc:
+                    if not is_cuda_oom(exc, torch):
+                        raise
+                    retry_size = oom_fallback_size(active_chunk)
+                    if retry_size is None or retry_size <= active_overlap:
+                        raise RuntimeError(
+                            f"CUDA OOM persisted at chunk_size={active_chunk}; no safe smaller window remains. "
+                            "Lower process resolution or close other GPU applications."
+                        ) from exc
+                    report["cuda_oom_retries"] += 1
+                    print(f"CUDA OOM at chunk_size={active_chunk}; retrying the full sequence with chunk_size={retry_size}", flush=True)
+                    active_chunk = retry_size
+                    active_overlap = min(active_overlap, active_chunk - 1)
+                    report["chunk_size"] = active_chunk
+                    report["chunk_overlap"] = active_overlap
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                    gc.collect()
+                    shutil.rmtree(output_path / ".driftx_stream_tmp", ignore_errors=True)
 
+        else:
+            from driftx.reconstruction.gaussian import run_gaussian_reconstruction
+            gaussian_dir = output_path if reconstruction_mode == "gaussian" else output_path / "gaussian"
+            result, gaussian_artifacts = run_gaussian_reconstruction(
+                model_obj, frame_paths, gaussian_dir,
+                process_res=process_res,
+                stage_timings=report["stage_timings_seconds"],
+            )
+            report["frames_processed"] = len(frame_paths)
+            report["num_chunks"] = 1
+            report["gs_enabled"] = True
+            report["artifacts"] = gaussian_artifacts
+            _normalize_prediction(result)
+        if reconstruction_mode == "both":
+            from driftx.reconstruction.gaussian import run_gaussian_reconstruction
+            gaussian_dir = output_path / "gaussian"
+            _, gaussian_artifacts = run_gaussian_reconstruction(
+                model_obj, frame_paths, gaussian_dir,
+                process_res=process_res,
+                stage_timings=report["stage_timings_seconds"],
+            )
+            report["gs_enabled"] = True
+            report["artifacts"].update(gaussian_artifacts)
         report["stage_timings_seconds"]["DA3_inference"] = report["stage_timings_seconds"].get("DA3_inference", 0.0)
         report["stage_timings_seconds"]["preprocessing"] = report["stage_timings_seconds"].get("preprocessing", 0.0)
         report["preprocessing_seconds"] = report["stage_timings_seconds"]["preprocessing"]
@@ -427,11 +457,20 @@ def run_benchmark(
 
         _write_frame_metadata(output_path, info, frame_paths, result)
         export_timings: dict[str, float] = {}
-        export_started = time.perf_counter()
-        from driftx.export import export_baseline
-        report["artifacts"] = export_baseline(result, output_path, stage_timings=export_timings)
-        report["export_seconds"] = time.perf_counter() - export_started
-        report["stage_timings_seconds"].update(export_timings)
+        if reconstruction_mode in {"baseline", "both"}:
+            export_started = time.perf_counter()
+            from driftx.export import export_baseline
+            baseline_artifacts = export_baseline(result, output_path, stage_timings=export_timings)
+            report["export_seconds"] = time.perf_counter() - export_started
+            report["stage_timings_seconds"].update(export_timings)
+            report["artifacts"] = baseline_artifacts
+        else:
+            report["export_seconds"] = report["stage_timings_seconds"].get("Gaussian_export", "not measured")
+        if reconstruction_mode == "both":
+            report["export_seconds"] = (
+                report["export_seconds"]
+                + report["stage_timings_seconds"].get("Gaussian_export", 0.0)
+            )
         report["artifacts"].update({
             "frames": str(output_path / "frames.json"),
             "camera_poses": str(output_path / "camera_poses.json"),
@@ -480,7 +519,7 @@ def run_benchmark(
                 "frames_per_second",
                 "mean_confidence", "median_confidence", "valid_depth_pixels",
                 "valid_depth_percentage", "model_size_mb", "cuda_oom_retries",
-                "final_precision", "device", "gs_available", "gs_error", "gs_enabled",
+                "final_precision", "device", "reconstruction_mode", "gs_available", "gs_error", "gs_enabled",
             )},
             "stage_timings_seconds": report["stage_timings_seconds"],
         }

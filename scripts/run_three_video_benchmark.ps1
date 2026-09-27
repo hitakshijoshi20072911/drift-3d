@@ -3,7 +3,9 @@ param(
     [ValidateSet("auto", "cpu", "cuda")]
     [string]$Device = "cuda",
     [ValidateSet("smoke", "balanced", "quality")]
-    [string]$Profile = "smoke"
+    [string]$Profile = "smoke",
+    [ValidateSet("baseline", "gaussian", "both")]
+    [string]$ReconstructionMode = "baseline"
 )
 
 $ErrorActionPreference = "Stop"
@@ -12,6 +14,7 @@ python scripts\run_three_video_benchmark.py `
     --model $Model `
     --device $Device `
     --profile $Profile `
+    --reconstruction-mode $ReconstructionMode `
     --input-dir input `
     --output-dir outputs\benchmarks\three_video `
     --figures-dir output_figures\three_video `

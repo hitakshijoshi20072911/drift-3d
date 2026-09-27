@@ -116,8 +116,11 @@ check and preserve each generated `run_report.json`.
 
 ### Run three benchmark videos and generate figures
 
-The repository includes `input/test3.mp4`, `input/test6.mp4`, and `input/test7.mp4`. Run them sequentially so GPU memory is not shared between
-jobs, then generate the eight PNG/SVG figures plus CSV/JSON summaries:
+The sequential runner is configured to validate exactly `input/test3.mp4`,
+`input/test6.mp4`, and `input/test7.mp4`. Put those three input files in the
+`input/` directory before running it; the runner stops clearly if one is absent.
+Run them sequentially so GPU memory is not shared between jobs, then generate
+the eight PNG/SVG figures plus CSV/JSON summaries:
 
 ```bash
 python scripts/run_three_video_benchmark.py \
@@ -177,7 +180,7 @@ overlapping DA3 inference windows. `--max-frames` means the **total sampled
 frames to process**, not the size of a GPU batch; `--max-frames 0` processes all
 sampled views. Neighboring windows are aligned from their shared frames before
 they are merged into one global reconstruction. The baseline defaults to DA3
-Large 1.1 and does not require `gsplat`.
+Large 1.1 and does not require `gsplat` for the baseline.
 
 ```bash
 # Keep the reproducible low-quality baseline fixed once measurements start.
@@ -211,6 +214,35 @@ Outputs include `scene.glb`, `scene.ply`, root `results.npz`, `depth_vis/`,
 report records actual measured values or **`"not measured"`** when the hardware,
 dependencies, or failed run cannot provide them; it does not fabricate GPU
 results or reconstruction-quality claims.
+
+### Benchmark the baseline against DA3's existing Gaussian branch
+
+The Gaussian path is a thin adapter over the vendored DA3 implementation; it
+does not introduce a second 3DGS system. Use separate output directories when
+comparing A and B so each `run_report.json` remains independently inspectable:
+
+```bash
+# A: existing streaming depth/point-cloud/GLB path
+python -m driftx benchmark --video input/test3.mp4 \
+  --output outputs/compare/test3_baseline --model depth-anything/DA3-LARGE-1.1 \
+  --device cuda --profile smoke --reconstruction-mode baseline
+
+# B: existing DA3 Gaussian branch -> gaussian.ply + gaussian_preview.mp4
+python -m driftx benchmark --video input/test3.mp4 \
+  --output outputs/compare/test3_gaussian --model depth-anything/DA3-LARGE-1.1 \
+  --device cuda --profile smoke --reconstruction-mode gaussian
+```
+
+To run both paths in one report, use `--reconstruction-mode both`; baseline
+artifacts stay at the output root and Gaussian artifacts are written under
+`<output>/gaussian/`. Gaussian mode requires the checkpoint's Gaussian head and
+the optional `gsplat` renderer. The reports record actual `total_runtime_seconds`,
+`peak_gpu_memory_mb`, and per-stage timings; when a dependency or GPU is
+unavailable they explicitly contain **`"not measured"`**. There is no invented
+quality score. For visual quality, open the generated `scene.glb` and
+`gaussian.ply` in the same viewer, capture one screenshot of each from the same
+view, and record qualitative observations (coverage, holes, blur, floaters) in
+your comparison notes.
 
 ### Run the three-video DA3 Large 1.1 baseline on Windows/Windsurf
 
