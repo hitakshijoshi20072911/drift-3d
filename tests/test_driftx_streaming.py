@@ -47,6 +47,12 @@ class StreamingTests(unittest.TestCase):
         self.assertIn("gradio>=5", all_extra)
         self.assertNotIn("gsplat", all_extra)
 
+    def test_runtime_dependencies_include_imported_addict_package(self):
+        project = Path("pyproject.toml").read_text(encoding="utf-8")
+        requirements = Path("requirements.txt").read_text(encoding="utf-8")
+        self.assertIn('"addict>=2.4.0"', project)
+        self.assertIn("addict>=2.4.0", requirements)
+
     def test_chunks_cover_every_frame_and_overlap(self):
         chunks = list(iter_chunks(65, 16, 4))
         covered = []

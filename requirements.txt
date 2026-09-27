@@ -1,4 +1,5 @@
 pre-commit
+addict>=2.4.0
 trimesh
 torch>=2
 torchvision

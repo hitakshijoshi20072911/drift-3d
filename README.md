@@ -281,6 +281,7 @@ py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 python -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+python -m pip install "addict>=2.4.0"
 python -m pip install -e ".[figures]"
 
 # Required preflight: this must print a path inside the active .venv.
