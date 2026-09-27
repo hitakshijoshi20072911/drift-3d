@@ -53,6 +53,35 @@ def _fmt(value: Any, unit: str = "", digits: int = 2) -> str:
     return f"{number:.{digits}f}{unit}"
 
 
+def _metric(report: dict[str, Any], current: str, legacy: str | None = None) -> Any:
+    """Read a schema-v2 value, falling back to a schema-v1 report key."""
+    value = report.get(current)
+    if value is None and legacy is not None:
+        value = report.get(legacy)
+    return value
+
+
+def _trajectory_centers(extrinsics: np.ndarray | None) -> np.ndarray | None:
+    """Return camera centers for DA3 (N,3,4) or homogeneous (N,4,4) w2c poses."""
+    if extrinsics is None:
+        return None
+    ext = np.asarray(extrinsics)
+    if ext.ndim != 3:
+        return None
+    if ext.shape[1:] == (4, 4):
+        if not np.isfinite(ext).all():
+            return None
+        return np.linalg.inv(ext)[:, :3, 3]
+    if ext.shape[1:] == (3, 4):
+        rotation = ext[:, :3, :3]
+        translation = ext[:, :3, 3]
+        if not np.isfinite(ext).all():
+            return None
+        # DA3 extrinsics are world-to-camera: C_world = -R.T @ t.
+        return -np.einsum("nji,nj->ni", rotation, translation)
+    return None
+
+
 def _short_name(report: dict[str, Any], index: int) -> str:
     return Path(str(report.get("video", "video"))).stem or f"video_{index + 1}"
 
@@ -105,14 +134,14 @@ def fig01_dashboard(reports, output):
     fig, axes = plt.subplots(1, len(reports), figsize=(5.2 * len(reports), 6.2), squeeze=False)
     fig.suptitle("DRIFTX Phase 1 Baseline — End-to-End Performance Dashboard", fontsize=16, weight="bold")
     keys = [
-        ("Duration", "video_duration_seconds", " s"),
+        ("Duration", "video_duration_s", " s"),
         ("Source FPS", "source_fps", " fps"),
-        ("Sampled FPS", "sampled_fps", " fps"),
-        ("Frames extracted", "frames_extracted", ""),
+        ("Sampled FPS", "sample_fps", " fps"),
+        ("Frames extracted", "frames_sampled", ""),
         ("Frames processed", "frames_processed", ""),
-        ("Total runtime", "total_wall_clock_seconds", " s"),
-        ("Inference runtime", "inference_time_seconds", " s"),
-        ("Export runtime", "export_time_seconds", " s"),
+        ("Total runtime", "total_runtime_seconds", " s"),
+        ("Inference runtime", "inference_seconds", " s"),
+        ("Export runtime", "export_seconds", " s"),
         ("GLB size", "glb_size_mb", " MB"),
         ("PLY size", "ply_size_mb", " MB"),
         ("GPU peak", "gpu_peak_gb", " GB"),
@@ -124,7 +153,15 @@ def fig01_dashboard(reports, output):
         y = 0.84
         for title, key, unit in keys:
             ax.text(0.08, y, title, fontsize=10, color="#455A64", transform=ax.transAxes)
-            ax.text(0.92, y, _fmt(report.get(key), unit), fontsize=10, ha="right", weight="bold", transform=ax.transAxes)
+            legacy = {
+                "video_duration_s": "video_duration_seconds", "sample_fps": "sampled_fps",
+                "frames_sampled": "frames_extracted", "total_runtime_seconds": "total_wall_clock_seconds",
+                "inference_seconds": "inference_time_seconds", "export_seconds": "export_time_seconds",
+            }.get(key)
+            value = _metric(report, key, legacy)
+            if key == "gpu_peak_gb":
+                value = report.get(key)
+            ax.text(0.92, y, _fmt(value, unit), fontsize=10, ha="right", weight="bold", transform=ax.transAxes)
             y -= 0.072
     _save(fig, output, FIG_NAMES[0])
 
@@ -135,15 +172,19 @@ def _artifact_sizes(reports):
             path = report.get("artifacts", {}).get(key)
             size = Path(path).stat().st_size / 1e6 if path and Path(path).is_file() else float("nan")
             report[field] = size
-        gpu = _number(report.get("gpu_memory_peak_bytes"))
-        report["gpu_peak_gb"] = gpu / (1024 ** 3) if not math.isnan(gpu) else float("nan")
+        gpu_mb = _number(report.get("peak_gpu_memory_mb"))
+        if not math.isnan(gpu_mb):
+            report["gpu_peak_gb"] = gpu_mb / 1024
+        else:
+            gpu = _number(report.get("gpu_memory_peak_bytes"))
+            report["gpu_peak_gb"] = gpu / (1024 ** 3) if not math.isnan(gpu) else float("nan")
 
 
 def fig02_runtime(reports, output):
     labels = _labels(reports)
-    extraction = np.array([_number(r.get("frame_extraction_time_seconds")) for r in reports])
-    inference = np.array([_number(r.get("inference_time_seconds")) for r in reports])
-    export = np.array([_number(r.get("export_time_seconds")) for r in reports])
+    extraction = np.array([_number(_metric(r, "video_decode_seconds", "frame_extraction_time_seconds")) for r in reports])
+    inference = np.array([_number(_metric(r, "inference_seconds", "inference_time_seconds")) for r in reports])
+    export = np.array([_number(_metric(r, "export_seconds", "export_time_seconds")) for r in reports])
     fig, ax = plt.subplots(figsize=(10, 6))
     bottom = np.zeros(len(reports))
     for values, name, color in zip((extraction, inference, export), ("Frame extraction", "DA3 inference", "Export"), COLORS[:3]):
@@ -151,7 +192,7 @@ def fig02_runtime(reports, output):
         ax.bar(labels, safe / 60, bottom=bottom / 60, label=name, color=color)
         bottom += safe
     for x, report in enumerate(reports):
-        total = _number(report.get("total_wall_clock_seconds"))
+        total = _number(_metric(report, "total_runtime_seconds", "total_wall_clock_seconds"))
         if not math.isnan(total):
             ax.text(x, (bottom[x] / 60) + 0.03, f"total {_fmt(total, ' s')}", ha="center", fontsize=9)
     ax.set_title("DRIFTX Baseline Runtime Breakdown", weight="bold")
@@ -164,11 +205,11 @@ def fig02_runtime(reports, output):
 
 def fig03_pipeline(reports, output):
     labels = _labels(reports)
-    fields = [("source_frames", "Original frames"), ("frames_extracted", "Sampled frames"), ("frames_processed", "Processed frames")]
+    fields = [("source_frames", "Original frames"), ("frames_sampled", "Sampled frames"), ("frames_processed", "Processed frames")]
     fig, axes = plt.subplots(1, len(reports), figsize=(5 * len(reports), 5), squeeze=False)
     fig.suptitle("Frame Reduction and Processing Efficiency", fontsize=15, weight="bold")
     for ax, report, label in zip(axes[0], reports, labels):
-        values = [_number(report.get(key)) for key, _ in fields]
+        values = [_number(_metric(report, key, "frames_extracted" if key == "frames_sampled" else None)) for key, _ in fields]
         npz = report.get("_npz", {})
         depth = npz.get("depth")
         valid_frames = int(np.sum(np.any(np.isfinite(depth) & (depth > 0), axis=(1, 2)))) if depth is not None and depth.ndim == 3 else float("nan")
@@ -227,7 +268,12 @@ def _temporal(report):
         return None
     frame_conf = np.nanmean(conf, axis=(1, 2))
     valid = np.mean(np.isfinite(depth) & (depth > 0), axis=(1, 2)) * 100
-    fps = _number(report.get("sampled_fps"))
+    frame_ids = data.get("frame_ids")
+    source_fps = _number(report.get("source_fps"))
+    if frame_ids is not None and len(frame_ids) == len(frame_conf) and source_fps > 0:
+        time_s = (np.asarray(frame_ids, dtype=float) - float(frame_ids[0])) / source_fps
+        return time_s, frame_conf, valid
+    fps = _number(_metric(report, "sample_fps", "sampled_fps"))
     if math.isnan(fps) or fps <= 0:
         fps = 1.0
     return np.arange(len(frame_conf)) / fps, frame_conf, valid
@@ -261,10 +307,10 @@ def fig06_trajectory(reports, output):
     for i, (report, label) in enumerate(zip(reports, labels), 1):
         ax = fig.add_subplot(1, len(reports), i, projection="3d")
         ext = report.get("_npz", {}).get("extrinsics")
-        if ext is None or ext.ndim != 3:
+        poses = _trajectory_centers(ext)
+        if poses is None or len(poses) == 0:
             ax.text2D(0.5, 0.5, "not measured: poses unavailable", transform=ax.transAxes, ha="center")
         else:
-            poses = np.linalg.inv(ext)[:, :3, 3]
             colors = np.linspace(0, 1, len(poses))
             ax.plot(poses[:, 0], poses[:, 1], poses[:, 2], color=COLORS[0], lw=1.5)
             ax.scatter(poses[:, 0], poses[:, 1], poses[:, 2], c=colors, cmap="viridis", s=16)
@@ -273,7 +319,7 @@ def fig06_trajectory(reports, output):
             ax.set_ylabel("Y")
             ax.set_zlabel("Z")
         ax.set_title(label, weight="bold")
-        ax.legend(loc="best") if ext is not None and ext.ndim == 3 else None
+        ax.legend(loc="best") if poses is not None and len(poses) else None
     fig.suptitle("DA3 Reconstructed Camera Trajectory", fontsize=15, weight="bold")
     _save(fig, output, FIG_NAMES[5])
 
@@ -315,8 +361,8 @@ def fig07_qualitative(reports, output):
 def fig08_scaling(reports, output):
     labels = _labels(reports)
     frames = np.array([_number(r.get("frames_processed")) for r in reports])
-    duration = np.array([_number(r.get("video_duration_seconds")) for r in reports])
-    runtime = np.array([_number(r.get("total_wall_clock_seconds")) for r in reports])
+    duration = np.array([_number(_metric(r, "video_duration_s", "video_duration_seconds")) for r in reports])
+    runtime = np.array([_number(_metric(r, "total_runtime_seconds", "total_wall_clock_seconds")) for r in reports])
     fig, axes = plt.subplots(1, 2, figsize=(12, 5))
     for ax, x, xlabel in ((axes[0], frames, "Processed frames"), (axes[1], duration, "Video duration (s)")):
         valid = np.isfinite(x) & np.isfinite(runtime)
@@ -344,13 +390,33 @@ def _summary(reports):
     rows = []
     for report in reports:
         row = {"video": _short_name(report, len(rows)), "report_path": report.get("_report_path", "")}
-        for key in (
-            "status", "model_variant", "device", "video_duration_seconds", "source_fps", "source_frames",
-            "sampled_fps", "frames_extracted", "frames_processed", "frame_extraction_time_seconds",
-            "inference_time_seconds", "export_time_seconds", "total_wall_clock_seconds",
-            "valid_depth_pixels", "mean_confidence", "median_confidence", "gpu_memory_peak_bytes",
-        ):
-            row[key] = report.get(key, "not measured")
+        row.update({
+            "status": report.get("status", "not measured"),
+            "model_variant": report.get("model_variant", "not measured"),
+            "device": report.get("device", "not measured"),
+            "video_duration_seconds": _metric(report, "video_duration_s", "video_duration_seconds"),
+            "source_fps": report.get("source_fps", "not measured"),
+            "source_frames": report.get("source_frames", "not measured"),
+            "sampled_fps": _metric(report, "sample_fps", "sampled_fps"),
+            "frames_extracted": _metric(report, "frames_sampled", "frames_extracted"),
+            "frames_processed": report.get("frames_processed", "not measured"),
+            "frame_extraction_time_seconds": _metric(report, "video_decode_seconds", "frame_extraction_time_seconds"),
+            "inference_time_seconds": _metric(report, "inference_seconds", "inference_time_seconds"),
+            "export_time_seconds": _metric(report, "export_seconds", "export_time_seconds"),
+            "total_wall_clock_seconds": _metric(report, "total_runtime_seconds", "total_wall_clock_seconds"),
+            "frames_per_second": report.get("frames_per_second", "not measured"),
+            "chunk_size": report.get("chunk_size", "not measured"),
+            "chunk_overlap": report.get("chunk_overlap", "not measured"),
+            "num_chunks": report.get("num_chunks", "not measured"),
+            "precision": report.get("final_precision", "not measured"),
+            "cuda_oom_retries": report.get("cuda_oom_retries", "not measured"),
+            "valid_depth_pixels": report.get("valid_depth_pixels", "not measured"),
+            "valid_depth_percentage": report.get("valid_depth_percentage", "not measured"),
+            "mean_confidence": report.get("mean_confidence", "not measured"),
+            "median_confidence": report.get("median_confidence", "not measured"),
+            "gpu_memory_peak_bytes": report.get("gpu_memory_peak_bytes", "not measured"),
+            "peak_gpu_memory_mb": report.get("peak_gpu_memory_mb", "not measured"),
+        })
         row["glb_size_mb"] = report.get("glb_size_mb", "not measured")
         row["ply_size_mb"] = report.get("ply_size_mb", "not measured")
         rows.append(row)

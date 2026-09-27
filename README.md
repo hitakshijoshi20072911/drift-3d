@@ -110,23 +110,47 @@ The original `da3` entry point is intentionally retained for compatibility. The 
 python app_live.py path/to/scene.glb
 ```
 
-### Run the baseline benchmark
+### Run the memory-bounded streaming benchmark
 
-The benchmark reuses the vendored inference and export paths while measuring
-the video, sampling, inference, confidence, and export facts that are
-available on the current machine. It writes `run_report.json` alongside the
-extracted frames and artifacts.
+`driftx benchmark` samples video on the CPU and processes the selected views in
+overlapping DA3 inference windows. `--max-frames` means the **total sampled
+frames to process**, not the size of a GPU batch; `--max-frames 0` processes all
+sampled views. Neighboring windows are aligned from their shared frames before
+they are merged into one global reconstruction. The baseline defaults to DA3
+Large 1.1 and does not require `gsplat`.
 
 ```bash
+# Keep the reproducible low-quality baseline fixed once measurements start.
 python -m driftx benchmark \
   --video input/test.mp4 \
-  --output outputs/benchmark_test
+  --output outputs/benchmarks/test_smoke \
+  --model depth-anything/DA3-LARGE-1.1 \
+  --device auto \
+  --profile smoke
+
+# Example long run: all sampled frames, never all views in one inference batch.
+python -m driftx benchmark \
+  --video input/test.mp4 \
+  --output outputs/benchmarks/test_streaming \
+  --model depth-anything/DA3-LARGE-1.1 \
+  --device cuda \
+  --sample-fps 2 --max-frames 0 --process-res 630 \
+  --chunk-size 16 --chunk-overlap 4 --precision auto
 ```
 
-Optional controls include `--model`, `--device auto|cpu|cuda`,
-`--sample-fps`, `--max-frames`, and `--process-res`. The report uses **`"not measured"`** for
-values unavailable because of missing dependencies, hardware, or failed
-inference; it never substitutes an invented accuracy or improvement number.
+Profiles: `smoke` (1 FPS, 16-frame total cap, 504 resolution, window 8/overlap
+2), `balanced` (2 FPS, all sampled frames, 630 resolution, window 16/4), and
+`quality` (2 FPS, all sampled frames, 756 resolution, window 12/4). Conservative
+VRAM auto-sizing and CUDA OOM retries are enabled by default. See the
+[streaming design](docs/DRIFTX_STREAMING_DESIGN.md) and the
+[step-by-step local GPU runbook](docs/BENCHMARK_PROFILES.md) for Windows
+commands, output checks, and the sequential RTX 3050 test matrix.
+
+Outputs include `scene.glb`, `scene.ply`, root `results.npz`, `depth_vis/`,
+`frames.json`, `camera_poses.json`, `metrics.json`, and `run_report.json`. The
+report records actual measured values or **`"not measured"`** when the hardware,
+dependencies, or failed run cannot provide them; it does not fabricate GPU
+results or reconstruction-quality claims.
 
 ### Run the three-video DA3 Large 1.1 baseline on Windows/Windsurf
 
