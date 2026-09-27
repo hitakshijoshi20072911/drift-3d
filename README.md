@@ -91,8 +91,24 @@ python -m pip install --no-build-isolation \
 In Windows PowerShell, use one line instead of Bash `\` continuations:
 
 ```powershell
-python -m pip install --no-build-isolation "gsplat @ git+https://github.com/nerfstudio-project/gsplat.git@0b4dddf04cb687367602c01196913cde6a743d70"
+.\scripts\install_gsplat_windows.ps1
 ```
+
+The pinned `gsplat` package is a native CUDA extension. The NVIDIA driver and
+the CUDA runtime bundled inside the PyTorch wheel are not enough to compile it:
+the full NVIDIA CUDA Toolkit, including `nvcc.exe`, must be installed. The
+helper detects `CUDA_PATH`, sets `CUDA_HOME` for the current PowerShell
+session, verifies `nvcc`, and then installs the pinned renderer. If CUDA is
+installed in a non-default location, pass it explicitly:
+
+```powershell
+.\scripts\install_gsplat_windows.ps1 `
+  -CudaHome "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.8"
+```
+
+If you only want the baseline GLB benchmark, do not install `gsplat`; the
+baseline path does not need it. Gaussian mode and `--reconstruction-mode both`
+do require the CUDA Toolkit and `gsplat`.
 
 ### Verify the checkout locally
 
