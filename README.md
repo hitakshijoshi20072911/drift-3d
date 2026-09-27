@@ -79,6 +79,26 @@ pip install -e ".[app]"   # Gradio web application
 pip install -e ".[all]"   # all optional capabilities
 ```
 
+### Verify the checkout locally
+
+Run the CPU-safe checks before using a GPU benchmark or committing changes. The
+optional integration tests are skipped automatically when their visualization
+dependencies are unavailable.
+
+```bash
+python -m unittest discover -s tests -v
+python -m compileall -q driftx src frozen_ml app_live.py da3_streaming
+python -m pip install build
+python -m build --sdist --wheel --no-isolation
+```
+
+The test suite exercises streaming-window coverage, overlap alignment, OOM
+fallback sizing, artifact contracts, the mocked benchmark path, and figure
+generation. A successful package build confirms that the install metadata and
+vendored compatibility packages are included. GPU inference remains a separate
+hardware-dependent validation step; use the benchmark runbook below for that
+check and preserve each generated `run_report.json`.
+
 ### Reconstruct example images
 
 ```bash

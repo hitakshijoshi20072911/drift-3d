@@ -35,9 +35,6 @@ dependencies = [
     "plyfile",
     "pillow_heif",
     "safetensors",
-    "uvicorn",
-    "moviepy==1.0.3",
-    "typer>=0.9.0",
     "pycolmap",
 ]
 
@@ -64,7 +61,6 @@ packages = ["driftx", "src/depth_anything_3", "src/third_party"]
 include = [
   "/README.md",
   "/pyproject.toml",
-  "/NOTICE",
   "/THIRD_PARTY_LICENSES.md",
   "/CITATIONS.md",
   "/driftx",
