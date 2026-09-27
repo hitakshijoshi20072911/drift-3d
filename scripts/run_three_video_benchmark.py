@@ -20,7 +20,7 @@ def main() -> int:
     parser.add_argument("--input-dir", type=Path, default=Path("input"))
     parser.add_argument("--output-dir", type=Path, default=Path("outputs/benchmarks/three_video"))
     parser.add_argument("--figures-dir", type=Path, default=Path("output_figures/three_video"))
-    parser.add_argument("--videos", nargs=3, default=("test3.mp4", "test4.mp4", "test5.mp4"))
+    parser.add_argument("--videos", nargs=3, default=("test3.mp4", "test6.mp4", "test7.mp4"))
     args = parser.parse_args()
 
     args.output_dir.mkdir(parents=True, exist_ok=True)

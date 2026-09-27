@@ -116,8 +116,7 @@ check and preserve each generated `run_report.json`.
 
 ### Run three benchmark videos and generate figures
 
-The repository includes `input/test3.mp4`, `input/test4.mp4`, and
-`input/test5.mp4`. Run them sequentially so GPU memory is not shared between
+The repository includes `input/test3.mp4`, `input/test6.mp4`, and `input/test7.mp4`. Run them sequentially so GPU memory is not shared between
 jobs, then generate the eight PNG/SVG figures plus CSV/JSON summaries:
 
 ```bash
@@ -294,12 +293,12 @@ python -m driftx benchmark --video "input/test3.mp4" `
   --output "outputs/benchmarks/test3" --model $env:MODEL_DIR `
   --device $env:DEVICE --sample-fps 1.0 --max-frames 16 --process-res 504
 
-python -m driftx benchmark --video "input/test4.mp4" `
-  --output "outputs/benchmarks/test4" --model $env:MODEL_DIR `
+python -m driftx benchmark --video "input/test6.mp4" `
+  --output "outputs/benchmarks/test6" --model $env:MODEL_DIR `
   --device $env:DEVICE --sample-fps 1.0 --max-frames 16 --process-res 504
 
-python -m driftx benchmark --video "input/test5.mp4" `
-  --output "outputs/benchmarks/test5" --model $env:MODEL_DIR `
+python -m driftx benchmark --video "input/test7.mp4" `
+  --output "outputs/benchmarks/test7" --model $env:MODEL_DIR `
   --device $env:DEVICE --sample-fps 1.0 --max-frames 16 --process-res 504
 ```
 
@@ -314,8 +313,8 @@ outputs/benchmarks/
 ├── test3/scene.glb
 ├── test3/scene.ply
 ├── test3/exports/mini_npz/results.npz
-├── test4/...
-└── test5/...
+├── test6/...
+└── test7/...
 ```
 
 `input_images/` is created during frame extraction. The model must finish

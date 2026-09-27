@@ -14,8 +14,14 @@
 
 import os
 from typing import Literal, Optional
-import moviepy.editor as mpy
 import torch
+
+try:
+    # MoviePy 2.x moved the public clip classes to the package root.
+    from moviepy import ImageSequenceClip
+except ImportError:
+    # Keep compatibility with MoviePy 1.x used by older DA3 environments.
+    from moviepy.editor import ImageSequenceClip
 
 from depth_anything_3.model.utils.gs_renderer import run_renderer_in_chunk_w_trj_mode
 from depth_anything_3.specs import Prediction
@@ -140,7 +146,7 @@ def export_to_gs_video(
         )  # T x H x W x C, uint8, numpy()
 
         fps = 24
-        clip = mpy.ImageSequenceClip(frames, fps=fps)
+        clip = ImageSequenceClip(frames, fps=fps)
         output_name = f"{idx:04d}_{trj_mode}" if output_name is None else output_name
         save_path = os.path.join(export_dir, f"gs_video/{output_name}.mp4")
         # clip.write_videofile(save_path, codec="libx264", audio=False, bitrate="4000k")
