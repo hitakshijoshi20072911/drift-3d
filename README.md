@@ -108,6 +108,24 @@ The original `da3` entry point is intentionally retained for compatibility. The 
 python app_live.py path/to/scene.glb
 ```
 
+### Run the baseline benchmark
+
+The benchmark reuses the vendored inference and export paths while measuring
+the video, sampling, inference, confidence, and export facts that are
+available on the current machine. It writes `run_report.json` alongside the
+extracted frames and artifacts.
+
+```bash
+python -m driftx benchmark \
+  --video input/test.mp4 \
+  --output outputs/benchmark_test
+```
+
+Optional controls include `--model`, `--device auto|cpu|cuda`,
+`--sample-fps`, and `--process-res`. The report uses **`"not measured"`** for
+values unavailable because of missing dependencies, hardware, or failed
+inference; it never substitutes an invented accuracy or improvement number.
+
 ## Applications and impact
 
 DRIFTX is aimed at rapid spatial intelligence where repeat inspection is expensive, slow, or unsafe:
