@@ -246,11 +246,42 @@ Do not run the benchmark until `git pull` finishes successfully. Otherwise the
 old runner can create `input_images/` and `run_report.json` without the newer
 import and artifact fixes.
 
+### Install PyTorch correctly on Windows
+
+`nvidia-smi` only confirms that the NVIDIA driver can see the GPU. It does not
+install PyTorch inside the virtual environment. The PyTorch package name is
+**`torch`**, not `pytorch`; `pip install pytorch` intentionally fails with the
+message “The package named for PyTorch is `torch`”.
+
+Install a CUDA-enabled PyTorch wheel **before** installing DRIFTX. Use the
+official [PyTorch selector](https://pytorch.org/get-started/locally/) for the
+current stable CUDA wheel. For example, a current CUDA 12.8 wheel can be
+installed with:
+
+```powershell
+python -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+```
+
+If the selector gives a different CUDA index, use its command instead. Do not
+install the unrelated `pytorch` package from PyPI, and do not use Bash `\`
+line-continuation characters in PowerShell.
+
+Verify the installation before continuing:
+
+```powershell
+python -c "import torch; print('Torch:', torch.__version__); print('CUDA available:', torch.cuda.is_available()); print('CUDA runtime:', torch.version.cuda); print('GPU:', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'none')"
+```
+
+The command must print `CUDA available: True` for a GPU benchmark. If it prints
+`False`, reinstall the CUDA wheel selected by the official PyTorch page and
+check that `python -m pip --version` points inside `.venv`.
+
 ```powershell
 git pull origin main
 py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
+python -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
 python -m pip install -e ".[figures]"
 
 # Required preflight: this must print a path inside the active .venv.
@@ -263,12 +294,12 @@ python -m driftx benchmark --video "input/test3.mp4" `
   --output "outputs/benchmarks/test3" --model $env:MODEL_DIR `
   --device $env:DEVICE --sample-fps 1.0 --max-frames 16 --process-res 504
 
-python -m driftx benchmark --video "input/test6.mp4" `
-  --output "outputs/benchmarks/test6" --model $env:MODEL_DIR `
+python -m driftx benchmark --video "input/test4.mp4" `
+  --output "outputs/benchmarks/test4" --model $env:MODEL_DIR `
   --device $env:DEVICE --sample-fps 1.0 --max-frames 16 --process-res 504
 
-python -m driftx benchmark --video "input/test7.mp4" `
-  --output "outputs/benchmarks/test7" --model $env:MODEL_DIR `
+python -m driftx benchmark --video "input/test5.mp4" `
+  --output "outputs/benchmarks/test5" --model $env:MODEL_DIR `
   --device $env:DEVICE --sample-fps 1.0 --max-frames 16 --process-res 504
 ```
 
@@ -283,8 +314,8 @@ outputs/benchmarks/
 ├── test3/scene.glb
 ├── test3/scene.ply
 ├── test3/exports/mini_npz/results.npz
-├── test6/...
-└── test7/...
+├── test4/...
+└── test5/...
 ```
 
 `input_images/` is created during frame extraction. The model must finish
