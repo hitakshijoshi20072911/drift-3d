@@ -1,7 +1,0 @@
-DRIFTX incorporates the Depth Anything 3 codebase from ByteDance-Seed.
-
-The incorporated code is licensed under the Apache License, Version 2.0.
-Upstream repository: https://github.com/ByteDance-Seed/Depth-Anything-3
-
-DRIFTX is an integration and application project by Team ZeroError. It does
-not claim authorship of the underlying geometry, depth, or pose model.
