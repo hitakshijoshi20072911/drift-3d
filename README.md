@@ -96,9 +96,11 @@ In Windows PowerShell, use one line instead of Bash `\` continuations:
 
 The pinned `gsplat` package is a native CUDA extension. The NVIDIA driver and
 the CUDA runtime bundled inside the PyTorch wheel are not enough to compile it:
-the full NVIDIA CUDA Toolkit, including `nvcc.exe`, must be installed. The
-helper detects `CUDA_PATH`, sets `CUDA_HOME` for the current PowerShell
-session, verifies `nvcc`, and then installs the pinned renderer. If CUDA is
+the full NVIDIA CUDA Toolkit, including `nvcc.exe`, must be installed. You
+also need Visual Studio 2022 Build Tools with the **Desktop development with
+C++** workload. Run the helper from a **Developer PowerShell**. It detects
+`CUDA_PATH`, sets `CUDA_HOME` for the current PowerShell session, verifies
+`nvcc` and `cl.exe`, and then installs the pinned renderer. If CUDA is
 installed in a non-default location, pass it explicitly:
 
 ```powershell

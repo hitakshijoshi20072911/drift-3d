@@ -23,6 +23,10 @@ if (-not (Test-Path $nvcc)) {
     throw "CUDA_HOME '$CudaHome' is not a CUDA Toolkit root because '$nvcc' does not exist. Pass -CudaHome 'C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.8'."
 }
 
+if (-not (Get-Command cl.exe -ErrorAction SilentlyContinue)) {
+    throw "MSVC cl.exe was not found. Install Visual Studio 2022 Build Tools with the Desktop development with C++ workload, then run this script from a Developer PowerShell."
+}
+
 $env:CUDA_HOME = $CudaHome
 $env:CUDA_PATH = $CudaHome
 $env:PATH = "$CudaHome\bin;$CudaHome\lib\x64;$env:PATH"
