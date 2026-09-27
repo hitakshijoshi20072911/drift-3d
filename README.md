@@ -126,6 +126,81 @@ Optional controls include `--model`, `--device auto|cpu|cuda`,
 values unavailable because of missing dependencies, hardware, or failed
 inference; it never substitutes an invented accuracy or improvement number.
 
+### Run the three-video DA3 Large 1.1 baseline on Windows/Windsurf
+
+Run these commands in the Windsurf terminal from the repository root. The
+checkpoint name used by this repository for the requested **DA3 Large 1.1
+safe version** is `depth-anything/DA3NESTED-GIANT-LARGE-1.1`. If the weights
+are already downloaded locally, replace that value with the local checkpoint
+folder, for example `models\DA3_LARGE_1.1_SAFE`.
+
+```powershell
+git pull origin main
+py -3.11 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -e ".[figures]"
+
+$env:MODEL_DIR = "depth-anything/DA3NESTED-GIANT-LARGE-1.1"
+$env:DEVICE = "cuda"        # use "cpu" only if CUDA is unavailable
+
+python -m driftx benchmark --video "input/test3.mp4" `
+  --output "outputs/benchmarks/test3" --model $env:MODEL_DIR `
+  --device $env:DEVICE --sample-fps 1.0 --process-res 504
+
+python -m driftx benchmark --video "input/test6.mp4" `
+  --output "outputs/benchmarks/test6" --model $env:MODEL_DIR `
+  --device $env:DEVICE --sample-fps 1.0 --process-res 504
+
+python -m driftx benchmark --video "input/test7.mp4" `
+  --output "outputs/benchmarks/test7" --model $env:MODEL_DIR `
+  --device $env:DEVICE --sample-fps 1.0 --process-res 504
+```
+
+The three videos must exist in your local checkout; large video files are not
+required to be committed to Git. Each run writes its report and artifacts to
+its own directory:
+
+```text
+outputs/benchmarks/
+├── test3/run_report.json
+├── test3/input_images/
+├── test3/scene.glb
+├── test3/scene.ply
+├── test3/exports/mini_npz/results.npz
+├── test6/...
+└── test7/...
+```
+
+After all three runs finish, generate the documentation package:
+
+```powershell
+python -m driftx.figures `
+  --results-root "outputs/benchmarks" `
+  --output "output_figures"
+```
+
+This creates eight PNG and SVG figures plus `baseline_summary.csv` and
+`baseline_summary.json` in `output_figures`:
+
+```text
+output_figures/
+├── fig01_performance_dashboard.png/.svg
+├── fig02_runtime_breakdown.png/.svg
+├── fig03_frame_pipeline.png/.svg
+├── fig04_confidence_distribution.png/.svg
+├── fig05_temporal_quality.png/.svg
+├── fig06_camera_trajectory.png/.svg
+├── fig07_rgb_depth_confidence.png/.svg
+├── fig08_runtime_scaling.png/.svg
+├── baseline_summary.csv
+└── baseline_summary.json
+```
+
+The figures are diagnostic baseline documentation only. They do not claim
+spatial accuracy, improvement, or a runtime target unless those facts are
+actually measured in the generated reports.
+
 ## Applications and impact
 
 DRIFTX is aimed at rapid spatial intelligence where repeat inspection is expensive, slow, or unsafe:

@@ -43,8 +43,9 @@ dependencies = [
 
 [project.optional-dependencies]
 app = ["gradio>=5", "pillow>=9.0"] # requires that python3>=3.10
+figures = ["matplotlib>=3.7", "pillow>=9.0"]
 gs = ["gsplat @ git+https://github.com/nerfstudio-project/gsplat.git@0b4dddf04cb687367602c01196913cde6a743d70"]
-all = ["driftx[app,gs]"]
+all = ["driftx[app,figures,gs]"]
 
 [project.scripts]
 da3 = "depth_anything_3.cli:app"

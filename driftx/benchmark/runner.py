@@ -25,10 +25,12 @@ def _base_report(video: str, output: str, model: str, device: str, sample_fps: f
         "device": device,
         "requested_sampled_fps": sample_fps,
         "source_fps": _not_measured(),
+        "source_frames": _not_measured(),
         "sampled_fps": _not_measured(),
         "video_duration_seconds": _not_measured(),
         "frames_extracted": _not_measured(),
         "frames_processed": _not_measured(),
+        "frame_extraction_time_seconds": _not_measured(),
         "inference_time_seconds": _not_measured(),
         "export_time_seconds": _not_measured(),
         "total_wall_clock_seconds": _not_measured(),
@@ -59,10 +61,13 @@ def run_benchmark(video: str, output: str, model: str, device: str, sample_fps: 
     try:
         from driftx.ingest import extract_video_frames
 
+        extraction_started = time.perf_counter()
         info, frame_paths = extract_video_frames(video, output_path, sample_fps)
+        report["frame_extraction_time_seconds"] = time.perf_counter() - extraction_started
         report.update(
             {
                 "source_fps": info.source_fps,
+                "source_frames": info.source_frames,
                 "video_duration_seconds": info.duration_seconds,
                 "sampled_fps": info.sampled_fps,
                 "frames_extracted": len(frame_paths),

@@ -22,7 +22,7 @@ def build_parser() -> argparse.ArgumentParser:
     benchmark.add_argument("--output", required=True, help="Directory for frames, exports, and run_report.json.")
     benchmark.add_argument(
         "--model",
-        default="depth-anything/DA3NESTED-GIANT-LARGE",
+        default="depth-anything/DA3NESTED-GIANT-LARGE-1.1",
         help="Pretrained model variant or local model directory.",
     )
     benchmark.add_argument(
