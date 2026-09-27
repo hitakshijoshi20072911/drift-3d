@@ -177,7 +177,7 @@ class StreamingTests(unittest.TestCase):
                     intrinsics=np.repeat(k[None], n, axis=0),
                     extrinsics=np.repeat(np.eye(4, dtype=np.float32)[None], n, axis=0),
                     processed_images=np.zeros((n, h, w, 3), dtype=np.uint8),
-                    is_metric=0,
+                    is_metric={"metric": True, "source": "checkpoint"},
                 )
 
         try:
@@ -192,6 +192,7 @@ class StreamingTests(unittest.TestCase):
                 self.assertEqual([c.start for c in chunks], [0, 6])
                 self.assertEqual(result.depth.shape[0], 13)
                 self.assertEqual(result.frame_ids.tolist(), list(ids))
+                self.assertEqual(result.is_metric, {"metric": True, "source": "checkpoint"})
                 self.assertEqual(len(alignment), 1)
                 self.assertEqual(alignment[0]["inliers"], alignment[0]["correspondences"])
                 self.assertTrue((temp_dir / "depth.npy").is_file())
@@ -260,7 +261,7 @@ class StreamingTests(unittest.TestCase):
                     intrinsics=np.repeat(k[None], n, axis=0),
                     extrinsics=np.repeat(np.eye(4, dtype=np.float32)[None], n, axis=0),
                     processed_images=np.full((n, h, w, 3), 120, dtype=np.uint8),
-                    is_metric=0,
+                    is_metric={"metric": True, "source": "checkpoint"},
                 )
 
         info = SimpleNamespace(

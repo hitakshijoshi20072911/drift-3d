@@ -285,7 +285,10 @@ def _run_stream_attempt(model: Any, torch: Any, frame_paths: list[str], source_f
         output = Prediction(
             depth=maps["depth"], conf=maps["conf"], extrinsics=maps["extrinsics"],
             intrinsics=maps["intrinsics"], processed_images=maps["images"],
-            is_metric=int(getattr(previous, "is_metric", 0)),
+            # Recent DA3 checkpoint adapters may expose structured metric metadata
+            # (e.g. a mapping) rather than the older integer flag. It is report-only
+            # for DRIFTX exports, so preserve the upstream value without coercion.
+            is_metric=getattr(previous, "is_metric", 0),
         )
         output.frame_ids = np.asarray(source_frame_ids, dtype=np.int64)
         return output, chunks, alignments, memory_samples, temp_dir
