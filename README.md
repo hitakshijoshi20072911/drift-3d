@@ -167,6 +167,9 @@ py -3.11 -m venv .venv
 python -m pip install --upgrade pip
 python -m pip install -e ".[figures]"
 
+# Required preflight: this must print a path inside the active .venv.
+python -c "import depth_anything_3; print(depth_anything_3.__file__)"
+
 $env:MODEL_DIR = "depth-anything/DA3NESTED-GIANT-LARGE-1.1"
 $env:DEVICE = "cuda"        # use "cpu" only if CUDA is unavailable
 
