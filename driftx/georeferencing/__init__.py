@@ -1,0 +1,1 @@
+"""DRIFTX georeferencing extension point."""

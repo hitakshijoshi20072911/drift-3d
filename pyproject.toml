@@ -48,7 +48,7 @@ all = ["driftx[app,gs]"]
 
 [project.scripts]
 da3 = "depth_anything_3.cli:app"
-driftx = "depth_anything_3.cli:app"
+driftx = "driftx.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/hitakshijoshi20072911/drift-3d"
@@ -57,13 +57,19 @@ Homepage = "https://github.com/hitakshijoshi20072911/drift-3d"
 source = "vcs"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/depth_anything_3"]
+packages = ["driftx", "src/depth_anything_3", "src/third_party"]
 
 [tool.hatch.build.targets.sdist]
 include = [
   "/README.md",
   "/pyproject.toml",
+  "/NOTICE",
+  "/THIRD_PARTY_LICENSES.md",
+  "/CITATIONS.md",
+  "/driftx",
+  "/frozen_ml",
   "/src/depth_anything_3",
+  "/src/third_party",
 ]
 
 [tool.hatch.metadata]

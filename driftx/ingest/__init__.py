@@ -1,0 +1,1 @@
+"""DRIFTX ingest extension point."""

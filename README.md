@@ -48,14 +48,16 @@ This checkout remains compatible with the existing upstream package and CLI. The
 
 | Area | Role |
 |---|---|
-| `src/depth_anything_3/` | Depth, pose, video, export, and service implementation |
+| `frozen_ml/3d/` | Frozen third-party depth, pose, video, export, and service implementation |
+| `src/depth_anything_3/` | Backwards-compatible import path for existing deployments |
+| `driftx/` | Product namespace for ingest, preprocessing, geometry, reconstruction, georeferencing, validation, export, and benchmarking |
 | `da3_streaming/` | Sliding-window streaming inference for long sequences |
 | `app_live.py` | Local inspection of an existing `.glb` scene |
 | `assets/examples/` | Small example inputs |
 | `docs/` | Existing CLI, API, and benchmark documentation |
 | `outputs/` | Existing generated example artifacts |
 
-The proposal’s future product surface can add dedicated DRIFTX modules for ingest, preprocessing, reconstruction, georeferencing, validation, export, benchmarking, and web visualization without changing the stable inference package in place.
+The DRIFTX product namespace is scaffolded for ingest, preprocessing, reconstruction, georeferencing, validation, export, and benchmarking. The frozen model remains isolated from that product code so future phases can evolve without changing the stable inference package in place.
 
 ## Quick start
 
@@ -98,7 +100,7 @@ da3 video assets/examples/robot_unitree.mp4 \
   --export-format glb
 ```
 
-The original `da3` entry point is intentionally retained for compatibility, and `driftx` is provided as the DRIFTX-branded alias. Both invoke the same implementation. See [docs/CLI.md](docs/CLI.md) for all supported modes and [docs/API.md](docs/API.md) for Python usage.
+The original `da3` entry point is intentionally retained for compatibility. The new `driftx` entry point exposes the DRIFTX product CLI, while the existing inference implementation remains available through `da3`. See [docs/CLI.md](docs/CLI.md) for all supported modes and [docs/API.md](docs/API.md) for Python usage.
 
 ### Inspect a generated GLB
 
@@ -152,8 +154,8 @@ The proposal references the following research directions and datasets:
 
 ## Built on
 
-DRIFTX’s geometry stage currently reuses the open-source Depth Anything 3 implementation and its pretrained model ecosystem; the team does not claim authorship of that underlying geometry, depth, or pose model. The surrounding single-pass UAV workflow and DRIFTX product direction are the team’s integration and application work. The upstream code is licensed under [Apache-2.0](LICENSE); pretrained model weights may have separate terms, including **CC BY-NC 4.0** for the default nested checkpoint. Review the upstream [repository](https://github.com/ByteDance-Seed/Depth-Anything-3), [model card](https://huggingface.co/depth-anything/DA3NESTED-GIANT-LARGE), and [paper](https://arxiv.org/abs/2511.10647) before redistribution or commercial use.
+DRIFTX's geometry backbone is a frozen, pretrained open-source foundation model. Full attribution and license terms: see [CITATIONS.md](CITATIONS.md) and [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md). The upstream code is licensed under [Apache-2.0](LICENSE); pretrained model weights may have separate terms, including **CC BY-NC 4.0** for the default nested checkpoint. Review the upstream [repository](https://github.com/ByteDance-Seed/Depth-Anything-3) and [model card](https://huggingface.co/depth-anything/DA3NESTED-GIANT-LARGE) before redistribution or commercial use.
 
 ## Repository status
 
-The DRIFTX update is intentionally compact: package metadata and a backwards-compatible CLI alias were added, and only the standalone viewer’s visible labels were rebranded. The existing inference package paths, dependencies, licenses, model weights, generated outputs, and `da3` deployment entry point remain unchanged.
+The DRIFTX refactor keeps the existing inference package, dependencies, licenses, model weights, generated outputs, and `da3` deployment entry point available through compatibility links. The vendored source is isolated under `frozen_ml/3d/`; DRIFTX product code lives under `driftx/`.
