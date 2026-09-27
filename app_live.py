@@ -21,16 +21,16 @@ def main():
         process=False,
     )
 
-    print(f"[DRIFT] Loaded: {glb}")
-    print(f"[DRIFT] Geometry objects: {len(scene.geometry)}")
+    print(f"[DRIFTX] Loaded: {glb}")
+    print(f"[DRIFTX] Geometry objects: {len(scene.geometry)}")
 
     if scene.bounds is not None:
         minimum, maximum = scene.bounds
         dimensions = maximum - minimum
         diagonal = float((dimensions @ dimensions) ** 0.5)
 
-        print(f"[DRIFT] Bounding-box dimensions: {dimensions}")
-        print(f"[DRIFT] Bounding-box diagonal: {diagonal:.4f} scene units")
+        print(f"[DRIFTX] Bounding-box dimensions: {dimensions}")
+        print(f"[DRIFTX] Bounding-box diagonal: {diagonal:.4f} scene units")
 
     # Correct trimesh 5.x viewer API
     from trimesh.viewer import windowed
@@ -40,7 +40,7 @@ def main():
         smooth=False,
         resolution=(1440, 900),
         resizable=True,
-        caption="DRIFT — DA3 3D Reconstruction",
+        caption="DRIFTX — 3D Reconstruction",
         flags={
             "cull": False,
             "wireframe": False,

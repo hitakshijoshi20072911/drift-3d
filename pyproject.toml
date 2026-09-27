@@ -3,13 +3,13 @@ requires = ["hatchling>=1.25", "hatch-vcs>=0.4"]
 build-backend = "hatchling.build"
 
 [project]
-name = "depth-anything-3"
+name = "driftx"
 version = "0.0.0"
-description = "Depth Anything 3"
+description = "Single-pass UAV video to georeferenced 3D reconstruction for inspection and disaster response"
 readme = "README.md"
 requires-python = ">=3.9, <=3.13"
 license = { text = "Apache-2.0" }
-authors = [{ name = "Your Name" }]
+authors = [{ name = "Team ZeroError" }]
 
 dependencies = [
     "pre-commit",
@@ -44,14 +44,14 @@ dependencies = [
 [project.optional-dependencies]
 app = ["gradio>=5", "pillow>=9.0"] # requires that python3>=3.10
 gs = ["gsplat @ git+https://github.com/nerfstudio-project/gsplat.git@0b4dddf04cb687367602c01196913cde6a743d70"]
-all = ["depth-anything-3[app,gs]"]
-
+all = ["driftx[app,gs]"]
 
 [project.scripts]
 da3 = "depth_anything_3.cli:app"
+driftx = "depth_anything_3.cli:app"
 
 [project.urls]
-Homepage = "https://github.com/ByteDance-Seed/Depth-Anything-3"
+Homepage = "https://github.com/hitakshijoshi20072911/drift-3d"
 
 [tool.hatch.version]
 source = "vcs"
