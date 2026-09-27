@@ -496,7 +496,19 @@ def _write_frame_metadata(output_dir: Path, info: Any, frame_paths: list[str], p
     frame_rows = []
     pose_rows = []
     for i, (source_id, image_path) in enumerate(zip(info.source_frame_ids, frame_paths)):
-        frame_rows.append({"frame_id": int(source_id), "timestamp_s": source_id / info.source_fps, "image": str(Path(image_path).relative_to(output_dir))})
+        # Windows may return an 8.3 short path from video extraction while the
+        # output directory uses its long form. ``Path.relative_to`` then raises
+        # even though both paths point to the same file. ``relpath`` handles
+        # that case and keeps the manifest portable for downstream tools.
+        try:
+            relative_image = os.path.relpath(str(image_path), start=str(output_dir))
+        except ValueError:
+            relative_image = str(image_path)
+        frame_rows.append({
+            "frame_id": int(source_id),
+            "timestamp_s": source_id / info.source_fps,
+            "image": Path(relative_image).as_posix(),
+        })
         c2w = np.linalg.inv(np.asarray(prediction.extrinsics[i], dtype=np.float64))
         pose_rows.append({
             "frame_id": int(source_id),

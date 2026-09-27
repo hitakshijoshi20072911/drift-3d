@@ -76,7 +76,22 @@ Optional capabilities:
 pip install --no-build-isolation \
   git+https://github.com/nerfstudio-project/gsplat.git@0b4dddf04cb687367602c01196913cde6a743d70
 pip install -e ".[app]"   # Gradio web application
-pip install -e ".[all]"   # all optional capabilities
+pip install -e ".[all]"   # Gradio + figure-generation capabilities
+```
+
+`gsplat` is intentionally not part of the `all` extra because its native
+extension must be built against the already-installed PyTorch/CUDA toolchain.
+Install it separately only when needed:
+
+```bash
+python -m pip install --no-build-isolation \
+  "gsplat @ git+https://github.com/nerfstudio-project/gsplat.git@0b4dddf04cb687367602c01196913cde6a743d70"
+```
+
+In Windows PowerShell, use one line instead of Bash `\` continuations:
+
+```powershell
+python -m pip install --no-build-isolation "gsplat @ git+https://github.com/nerfstudio-project/gsplat.git@0b4dddf04cb687367602c01196913cde6a743d70"
 ```
 
 ### Verify the checkout locally
@@ -98,6 +113,32 @@ generation. A successful package build confirms that the install metadata and
 vendored compatibility packages are included. GPU inference remains a separate
 hardware-dependent validation step; use the benchmark runbook below for that
 check and preserve each generated `run_report.json`.
+
+### Run three benchmark videos and generate figures
+
+The repository includes `input/test3.mp4`, `input/test4.mp4`, and
+`input/test5.mp4`. Run them sequentially so GPU memory is not shared between
+jobs, then generate the eight PNG/SVG figures plus CSV/JSON summaries:
+
+```bash
+python scripts/run_three_video_benchmark.py \
+  --model depth-anything/DA3-LARGE-1.1 \
+  --device cuda \
+  --profile smoke
+```
+
+Windows PowerShell:
+
+```powershell
+.\scripts\run_three_video_benchmark.ps1 `
+  -Model "models\DA3_LARGE_1.1_SAFE" `
+  -Device cuda `
+  -Profile smoke
+```
+
+Results are written to `outputs/benchmarks/three_video/<video-name>/`, and
+figures are written to `output_figures/three_video/`. The script stops on the
+first failed benchmark and never creates figures from an incomplete report.
 
 ### Reconstruct example images
 

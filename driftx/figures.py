@@ -338,7 +338,11 @@ def fig07_qualitative(reports, output):
         depth = npz.get("depth")
         conf = npz.get("conf")
         frames = sorted((Path(report.get("output", "")) / "input_images").glob("*.png"))
-        index = min(len(frames) // 2, depth.shape[0] // 2 - 1) if frames and depth is not None and depth.ndim == 3 else 0
+        if frames and depth is not None and depth.ndim == 3 and depth.shape[0] > 0:
+            index = min(len(frames) // 2, depth.shape[0] // 2)
+            index = min(index, len(frames) - 1)
+        else:
+            index = 0
         if frames:
             axes[0, i].imshow(_read_rgb(frames[index]))
         else:
@@ -366,15 +370,21 @@ def fig08_scaling(reports, output):
     fig, axes = plt.subplots(1, 2, figsize=(12, 5))
     for ax, x, xlabel in ((axes[0], frames, "Processed frames"), (axes[1], duration, "Video duration (s)")):
         valid = np.isfinite(x) & np.isfinite(runtime)
-        point_colors = np.asarray(COLORS[: len(reports)])[valid]
+        point_colors = np.asarray([COLORS[j % len(COLORS)] for j in range(len(reports))])[valid]
         ax.scatter(x[valid], runtime[valid] / 60, c=point_colors, s=70)
         for j, label in enumerate(labels):
             if valid[j]:
                 ax.annotate(label, (x[j], runtime[j] / 60), xytext=(5, 5), textcoords="offset points")
-        if valid.sum() >= 2:
-            coeff = np.polyfit(x[valid], runtime[valid] / 60, 1)
-            line_x = np.linspace(x[valid].min(), x[valid].max(), 100)
-            ax.plot(line_x, np.polyval(coeff, line_x), "--", color="#455A64", label="Least-squares fit")
+        if valid.sum() >= 2 and np.ptp(x[valid]) > 0:
+            # Center/scale x before fitting so large frame counts do not cause
+            # a poorly conditioned polynomial warning in small benchmark sets.
+            x_valid = x[valid]
+            x_center = float(x_valid.mean())
+            x_scale = float(x_valid.ptp())
+            coeff = np.polyfit((x_valid - x_center) / x_scale, runtime[valid] / 60, 1)
+            line_x = np.linspace(x_valid.min(), x_valid.max(), 100)
+            line_y = np.polyval(coeff, (line_x - x_center) / x_scale)
+            ax.plot(line_x, line_y, "--", color="#455A64", label="Least-squares fit")
         ax.set_xlabel(xlabel)
         ax.set_ylabel("Total runtime (minutes)")
         ax.grid(alpha=0.25)

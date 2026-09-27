@@ -23,6 +23,30 @@ from driftx.export.baseline import _depth_to_world_points
 
 
 class StreamingTests(unittest.TestCase):
+    def test_frame_metadata_uses_portable_relative_paths(self):
+        from driftx.benchmark.runner import _write_frame_metadata
+
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / "benchmark"
+            output.mkdir()
+            info = SimpleNamespace(source_frame_ids=(7,), source_fps=30.0)
+            prediction = SimpleNamespace(
+                extrinsics=np.eye(4, dtype=np.float32)[None],
+                intrinsics=np.eye(3, dtype=np.float32)[None],
+            )
+            _write_frame_metadata(
+                output, info, [str(output / "input_images" / "frame_000000007.png")], prediction
+            )
+            import json
+            row = json.loads((output / "frames.json").read_text())[0]
+            self.assertEqual(row["image"], "input_images/frame_000000007.png")
+
+    def test_all_extra_does_not_force_native_gsplat_build(self):
+        text = Path("pyproject.toml").read_text(encoding="utf-8")
+        all_extra = text.split("all = [", 1)[1].split("]", 1)[0]
+        self.assertIn("gradio>=5", all_extra)
+        self.assertNotIn("gsplat", all_extra)
+
     def test_chunks_cover_every_frame_and_overlap(self):
         chunks = list(iter_chunks(65, 16, 4))
         covered = []
