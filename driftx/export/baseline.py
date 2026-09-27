@@ -13,7 +13,12 @@ def export_baseline(prediction: Any, output_dir: str | Path) -> dict[str, str]:
 
     # Keep GLB and mini-NPZ generation on the vendored dispatcher so the
     # benchmark uses the same export semantics as the existing validated runs.
-    from third_party.depth_anything_3.utils.export import export
+    try:
+        from third_party.depth_anything_3.utils.export import export
+    except ModuleNotFoundError as exc:
+        if not str(exc).startswith("No module named 'third_party"):
+            raise
+        from depth_anything_3.utils.export import export
 
     export(prediction, "glb-mini_npz", str(output_path))
 

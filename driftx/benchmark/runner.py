@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import platform
 import time
+import traceback
 from pathlib import Path
 from typing import Any
 
@@ -76,7 +77,12 @@ def run_benchmark(video: str, output: str, model: str, device: str, sample_fps: 
 
         import numpy as np
         import torch
-        from third_party.depth_anything_3.services.inference_service import run_inference
+        try:
+            from third_party.depth_anything_3.services.inference_service import run_inference
+        except ModuleNotFoundError as exc:
+            if not str(exc).startswith("No module named 'third_party"):
+                raise
+            from depth_anything_3.services.inference_service import run_inference
 
         actual_device = (
             "cuda"
@@ -122,6 +128,7 @@ def run_benchmark(video: str, output: str, model: str, device: str, sample_fps: 
     except Exception as exc:
         report["status"] = "not measured"
         report["error"] = f"{type(exc).__name__}: {exc}"
+        report["error_traceback"] = traceback.format_exc()
     finally:
         report["total_wall_clock_seconds"] = time.perf_counter() - started
         report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")

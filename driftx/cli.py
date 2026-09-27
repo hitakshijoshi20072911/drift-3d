@@ -6,6 +6,7 @@ product-facing entry point is intentionally dependency-light so ``driftx
 """
 
 import argparse
+from pathlib import Path
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -53,7 +54,16 @@ def main(argv: list[str] | None = None) -> int:
             process_res=args.process_res,
         )
         print(f"DRIFTX benchmark status: {report['status']}")
-        print(f"Report: {args.output}/run_report.json")
+        report_path = Path(args.output).expanduser().resolve() / "run_report.json"
+        print(f"Report: {report_path}")
+        if report["status"] == "completed":
+            print(f"Frames processed: {report['frames_processed']}")
+            print(f"Valid depth pixels: {report['valid_depth_pixels']}")
+            print(f"Mean confidence: {report['mean_confidence']}")
+            print(f"Inference seconds: {report['inference_time_seconds']:.3f}")
+            print(f"Artifacts: {report['artifacts']}")
+        elif "error" in report:
+            print(f"Error: {report['error']}")
         return 0 if report["status"] == "completed" else 1
 
     parser.print_help()

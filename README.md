@@ -44,12 +44,14 @@ Georeferencing + validation → GLB / inspection-ready 3D output
 
 ### Current repository layout
 
-This checkout remains compatible with the existing upstream package and CLI. The runtime package is under `src/depth_anything_3/`; `app_live.py` is a lightweight GLB viewer/inspection entry point.
+This checkout remains compatible with the existing upstream package and CLI. The frozen runtime
+is stored under `frozen_ml/3d/` and exposed through install-time compatibility imports;
+`app_live.py` is a lightweight GLB viewer/inspection entry point.
 
 | Area | Role |
 |---|---|
 | `frozen_ml/3d/` | Frozen third-party depth, pose, video, export, and service implementation |
-| `src/depth_anything_3/` | Backwards-compatible import path for existing deployments |
+| `src/depth_anything_3/` and `src/third_party/` | Install-time compatibility import paths |
 | `driftx/` | Product namespace for ingest, preprocessing, geometry, reconstruction, georeferencing, validation, export, and benchmarking |
 | `da3_streaming/` | Sliding-window streaming inference for long sequences |
 | `app_live.py` | Local inspection of an existing `.glb` scene |
@@ -132,7 +134,16 @@ Run these commands in the Windsurf terminal from the repository root. The
 checkpoint name used by this repository for the requested **DA3 Large 1.1
 safe version** is `depth-anything/DA3NESTED-GIANT-LARGE-1.1`. If the weights
 are already downloaded locally, replace that value with the local checkpoint
-folder, for example `models\DA3_LARGE_1.1_SAFE`.
+folder, for example `models\DA3_LARGE_1.1_SAFE`. On Windows, download into
+that folder with `local_dir` rather than relying on the Hugging Face cache's
+symlinks:
+
+```powershell
+python -c "from huggingface_hub import snapshot_download; snapshot_download('depth-anything/DA3NESTED-GIANT-LARGE-1.1', local_dir='models/DA3_LARGE_1.1_SAFE')"
+```
+
+This avoids `WinError 1314` on machines where Developer Mode or administrator
+symlink privileges are not enabled.
 
 ```powershell
 git pull origin main
