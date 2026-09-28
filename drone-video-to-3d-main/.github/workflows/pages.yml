@@ -1,0 +1,64 @@
+name: Deploy viewer to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "sih_drone_pipeline/viewer/**"
+      - ".github/workflows/pages.yml"
+  release:
+    types: [published, edited]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sih_drone_pipeline/viewer
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: sih_drone_pipeline/viewer/package-lock.json
+
+      - run: npm ci
+
+      # Demo model files live in the "demo-data" release so the repository stays small.
+      # Without that release the site still builds; visitors open their own folder.
+      - name: Download demo flight
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p public/demo
+          gh release download demo-data --repo "${{ github.repository }}" --dir public/demo --clobber \
+            || echo "No demo-data release found: building without a demo."
+          ls -la public/demo
+
+      - run: npm run build
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: sih_drone_pipeline/viewer/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

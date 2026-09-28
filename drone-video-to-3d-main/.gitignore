@@ -1,0 +1,60 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+
+# Node/Vite viewer
+node_modules/
+dist/
+.vite/
+
+# Reconstruction workspaces and generated products
+workspace/
+outputs/
+/tmp/
+/runs/
+input/
+datasets/
+.ipynb_checkpoints/
+*.zip
+*.db
+*.bin
+*.log
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.ply
+*.las
+*.laz
+*.tif
+*.tiff
+*.glb
+*.gltf
+*.obj
+*.fbx
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+~$*
+.vscode/
+.idea/
+.claude/
+
+# Local material kept out of the public repository
+/deliverables/
+/scripts/
+/docs/*
+!/docs/CODE_MAP.md
+!/docs/PIPELINE.md
+!/docs/images/
+
+# Only the primary notebook and its guide belong in Git
+/notebooks/*
+!/notebooks/SIH26158_Colab.ipynb
+!/notebooks/README.md
+
+# Local demo data for the viewer (large model files)
+/sih_drone_pipeline/viewer/public/demo/

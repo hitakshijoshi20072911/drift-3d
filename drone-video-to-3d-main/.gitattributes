@@ -1,0 +1,4 @@
+# Normalize line endings for all contributors
+* text=auto eol=lf
+*.png binary
+*.jpg binary

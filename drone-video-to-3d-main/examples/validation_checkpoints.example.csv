@@ -1,0 +1,4 @@
+checkpoint_id,known_x_m,known_y_m,known_z_m,reconstructed_x_m,reconstructed_y_m,reconstructed_z_m
+GCP01,0.000,0.000,0.000,,,
+GCP02,10.000,0.000,0.000,,,
+GCP03,0.000,10.000,0.000,,,
