@@ -57,6 +57,9 @@ def build_parser() -> argparse.ArgumentParser:
     ablation = subparsers.add_parser("ablation", help="Summarize existing run reports without fabricating metrics.")
     ablation.add_argument("--reports", nargs="+", required=True, help="Paths to run_report.json files.")
     ablation.add_argument("--output", required=True, help="Directory for ablation_summary.json/csv.")
+    server = subparsers.add_parser("server", help="Run the local DRIFTX API server.")
+    server.add_argument("--host", default="127.0.0.1")
+    server.add_argument("--port", type=int, default=8123)
 
     return parser
 
@@ -82,6 +85,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"DRIFTX ablation status: {result['status']}")
         print(f"Summary: {Path(args.output).resolve() / 'ablation_summary.json'}")
         return 0 if result["status"] == "completed" else 1
+    if args.command == "server":
+        import uvicorn
+        uvicorn.run("driftx.server:app", host=args.host, port=args.port, reload=False)
+        return 0
     if args.command == "benchmark":
         from driftx.benchmark import run_benchmark
 

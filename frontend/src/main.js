@@ -11,6 +11,17 @@ import { captureImage, download, stamp, toGeoJSON, toKML, toCSV, toReportHTML } 
 const $ = sel => document.querySelector(sel);
 const $$ = sel => [...document.querySelectorAll(sel)];
 const esc = s => String(s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+const API_BASE = (import.meta.env.VITE_DRIFTX_API_URL || '').replace(/\/$/, '');
+const apiUrl = path => `${API_BASE}${path}`;
+async function apiJSON(path, options = {}) {
+  const response = await fetch(apiUrl(path), options);
+  if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+  return response.json();
+}
+function setApiStatus(text, good = false) {
+  const el = $('#api-status');
+  if (el) { el.textContent = `API: ${text}`; el.classList.toggle('good', good); }
+}
 
 const viewer = new Viewer($('#canvas-host'));
 viewer.onResize = [(w, h) => setLineResolution(w, h)];
@@ -157,7 +168,7 @@ async function openUrlFolder(base, name) {
   for (const f of ['viewer_metadata.json', 'run_report.json', 'verification_report.json', 'georeference.json']) {
     if (await exists(f)) json[f] = b + f;
   }
-  const model = (await exists('model.glb')) ? `${b}model.glb` : (await exists('mesh.ply')) ? `${b}mesh.ply` : null;
+  const model = (await exists('model.glb')) ? `${b}model.glb` : (await exists('scene.glb')) ? `${b}scene.glb` : (await exists('mesh.ply')) ? `${b}mesh.ply` : null;
   const cloud = (await exists('point_cloud.ply')) ? `${b}point_cloud.ply` : null;
   await loadSource({ model, cloud, json }, name);
 }
@@ -166,6 +177,7 @@ $('#btn-open').addEventListener('click', () => (history.state?.view === 'analysi
 $('#btn-resume').addEventListener('click', () => (history.state?.view === 'analysis' ? showWorkspace() : history.forward()));
 $('#folder-input').addEventListener('change', e => { const f = [...e.target.files]; e.target.value = ''; if (f.length) openFiles(f); });
 $('#files-input').addEventListener('change', e => { const f = [...e.target.files]; e.target.value = ''; if (f.length) openFiles(f); });
+$('#video-input').addEventListener('change', e => { const file = e.target.files?.[0]; e.target.value = ''; if (file) uploadAndProcess(file); });
 
 let dragDepth = 0;
 addEventListener('dragenter', e => { e.preventDefault(); dragDepth++; document.body.classList.add('dragging'); });
@@ -179,25 +191,59 @@ addEventListener('drop', async e => {
   if (files.length) openFiles(files);
 });
 
-// Demo data (e.g. when hosted with a demo/ folder) and ?data=<folder-url>
+async function uploadAndProcess(file) {
+  const status = $('#upload-status');
+  status.hidden = false;
+  status.textContent = `Uploading ${file.name}…`;
+  try {
+    const created = await apiJSON('/api/runs/upload', { method: 'POST', headers: { 'Content-Type': file.type || 'application/octet-stream', 'X-Filename': file.name }, body: file });
+    await apiJSON(`/api/runs/${created.run_id}/process`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ profile: 'smoke', reconstruction_mode: 'both' }) });
+    let state = { status: 'processing' };
+    while (state.status === 'processing' || state.status === 'uploaded') {
+      await new Promise(resolve => setTimeout(resolve, 1200));
+      state = await apiJSON(`/api/runs/${created.run_id}/status`);
+      status.textContent = `Processing ${file.name}… ${state.status}`;
+    }
+    const manifest = await apiJSON(`/api/runs/${created.run_id}/manifest`);
+    const modelUrl = manifest.artifacts?.glb || manifest.artifacts?.gaussian_ply;
+    if (!modelUrl) throw new Error(manifest.error || 'No GLB or point-cloud artifact was produced.');
+    await openUrlFolder(apiUrl(`/api/runs/${created.run_id}/artifacts/`), manifest.name || created.run_id);
+  } catch (error) {
+    status.textContent = `Processing unavailable: ${error.message}`;
+    toast(status.textContent, true);
+  }
+}
+
+// API-backed demos are the primary path. Static demo catalog remains a deployment-safe fallback.
 (async () => {
   const params = new URLSearchParams(location.search);
   const base = import.meta.env.BASE_URL;
   if (params.get('data')) return openUrlFolder(params.get('data'), params.get('name') || 'Reconstruction');
-  const catalog = await fetch(`${base}demo/index.json`).then(r => (r.ok ? r.json() : null)).catch(() => null);
-  if (catalog?.demos?.length) {
-    const list = $('#demo-list');
+  const list = $('#demo-list');
+  let demos = null;
+  try {
+    const payload = await apiJSON('/api/demos');
+    demos = payload.demos;
+    setApiStatus('connected', true);
+  } catch {
+    setApiStatus('offline — static demos', false);
+  }
+  if (!demos) {
+    const catalog = await fetch(`${base}demo/index.json`).then(r => (r.ok ? r.json() : null)).catch(() => null);
+    demos = catalog?.demos?.map(demo => ({ demo_id: demo.id, display_name: demo.name, artifact_base_url: `${base}demo/${demo.path}` })) || [];
+  }
+  if (demos.length) {
     list.hidden = false;
-    for (const demo of catalog.demos) {
+    for (const demo of demos) {
       const button = document.createElement('button');
       button.className = 'btn demo-button';
-      button.innerHTML = `<strong>${esc(demo.name)}</strong><small>PRECOMPUTED DEMO · ${esc(demo.id)}</small>`;
-      button.addEventListener('click', () => openUrlFolder(`${base}demo/${demo.path}`, demo.name));
+      button.innerHTML = `<strong>${esc(demo.display_name)}</strong><small>PRECOMPUTED DEMO · ${esc(demo.demo_id)}</small>`;
+      button.addEventListener('click', () => openUrlFolder(demo.artifact_base_url, demo.display_name));
       list.appendChild(button);
     }
     if (params.get('demo')) {
-      const selected = catalog.demos.find(d => d.id === params.get('demo')) || catalog.demos[0];
-      openUrlFolder(`${base}demo/${selected.path}`, selected.name);
+      const selected = demos.find(d => d.demo_id === params.get('demo')) || demos[0];
+      openUrlFolder(selected.artifact_base_url, selected.display_name);
     }
   }
 })();

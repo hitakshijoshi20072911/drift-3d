@@ -8,4 +8,9 @@ export default defineConfig({
     // One offline bundle (three.js + analysis code) is intentional.
     chunkSizeWarningLimit: 1200,
   },
+  server: {
+    proxy: {
+      '/api': process.env.DRIFTX_API_PROXY || 'http://127.0.0.1:8123',
+    },
+  },
 });

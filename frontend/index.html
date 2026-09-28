@@ -26,6 +26,7 @@
       </div>
 
       <div class="topbar-right">
+        <span id="api-status" class="api-status" title="DRIFTX API connection">API: checking</span>
         <button class="icon-btn" id="btn-open" title="Open another reconstruction (browser Back also works)" hidden><svg viewBox="0 0 24 24"><path d="M3 7h6l2 2h10v10H3z"/></svg><span>Open another</span></button>
         <button class="icon-btn" id="btn-screenshot" title="Save screenshot with scale and north arrow" hidden><svg viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg><span>Screenshot</span></button>
         <div class="menu" id="export-menu" hidden>
@@ -67,9 +68,11 @@
           <div class="landing-actions">
             <label class="btn primary">Open output folder<input id="folder-input" type="file" webkitdirectory multiple hidden /></label>
             <label class="btn">Choose files<input id="files-input" type="file" multiple accept=".glb,.ply,.json" hidden /></label>
+            <label class="btn">Add / Process Video<input id="video-input" type="file" accept="video/*,.mp4,.mov,.avi,.mkv,.webm" hidden /></label>
             <div id="demo-list" class="demo-list" hidden></div>
             <button class="btn" id="btn-resume" hidden>Back to model</button>
           </div>
+          <p id="upload-status" class="landing-hint" hidden></p>
           <p class="landing-hint">or drop the folder anywhere on this page</p>
           <details class="landing-files">
             <summary>Which files are used?</summary>

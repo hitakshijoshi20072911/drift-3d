@@ -454,3 +454,56 @@ DRIFTX's geometry backbone is a frozen, pretrained open-source foundation model.
 ## Repository status
 
 The DRIFTX refactor keeps the existing inference package, dependencies, licenses, model weights, generated outputs, and `da3` deployment entry point available through compatibility links. The vendored source is isolated under `frozen_ml/3d/`; DRIFTX product code lives under `driftx/`.
+
+
+## DRIFTX local end-to-end application
+
+The repository includes a real local API contract between the viewer and the DRIFTX pipeline. The API is the source of truth for the three precomputed demos, uploaded runs, run status, manifests, and generated artifacts.
+
+### Terminal 1 — backend
+
+```powershell
+python -m driftx doctor --json
+python -m driftx server --host 127.0.0.1 --port 8123
+```
+
+Verify:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8123/api/health
+(Invoke-RestMethod http://127.0.0.1:8123/api/demos).demos | Select-Object demo_id,display_name,representation
+```
+
+### Terminal 2 — frontend
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+Open the Vite URL. Demo cards call `/api/demos`; selecting a card loads its API-served GLB. The viewer retains a static demo fallback so precomputed demos remain usable when the API is offline.
+
+The **Add / Process Video** control uploads raw video bytes to `/api/runs/upload`, starts `/api/runs/{run_id}/process` using the smoke profile and `both` reconstruction mode, polls `/api/runs/{run_id}/status`, and opens the generated artifact when available. Gaussian output is optional; if unavailable, the API records the failure and attempts the baseline GLB fallback without labeling it Gaussian.
+
+### API contract
+
+- `GET /api/health`
+- `GET /api/demos`
+- `GET /api/demos/{demo_id}`
+- `GET /api/demos/{demo_id}/artifacts/{filename}`
+- `POST /api/runs/upload` with `X-Filename: video.mp4` and raw video body
+- `POST /api/runs/{run_id}/process` with JSON options such as `{"profile":"smoke","reconstruction_mode":"both"}`
+- `GET /api/runs/{run_id}/status`
+- `GET /api/runs/{run_id}/manifest`
+- `GET /api/runs/{run_id}/artifacts/{filename}`
+
+### Environment variables
+
+- `DRIFTX_MODEL`: default checkpoint for uploaded processing
+- `DRIFTX_RUN_ROOT`: persistent run/artifact directory
+- `DRIFTX_API_URL`: frontend API base URL for a separately deployed API
+- `DRIFTX_ALLOWED_ORIGINS`: comma-separated CORS origins
+- `DRIFTX_HOST` / `DRIFTX_PORT`: backend bind settings
+
+The single demo catalog is [`frontend/demo_manifest.json`](frontend/demo_manifest.json). It contains only the three existing repository demo artifact roots; no demo asset is fabricated by the API.

@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "demos": [
+    {
+      "demo_id": "test3",
+      "display_name": "IGDTUW COE Lab & New Building Road",
+      "artifact_root": "frontend/demo/test3",
+      "model": "DA3-LARGE-1.1",
+      "processing_mode": "precomputed",
+      "representation": "mesh/glb",
+      "source_video": "Not available in repository artifact",
+      "duration": "Not measured",
+      "source_fps": "Not measured",
+      "processed_frames": "Not measured",
+      "processing_time": "Not measured",
+      "inference_time": "Not measured",
+      "peak_vram": "Not measured",
+      "confidence": "Not measured",
+      "coverage": "Not validated",
+      "georeference": "Not measured; local reconstruction frame",
+      "quality": "Not validated",
+      "artifacts": {
+        "glb": "model.glb",
+        "rgb": "preview.jpg",
+        "depth": null,
+        "confidence": null,
+        "poses": null,
+        "metrics": null,
+        "metadata": "viewer_metadata.json",
+        "georeference": "georeference.json"
+      }
+    },
+    {
+      "demo_id": "test6",
+      "display_name": "Anveshan Foundation Construction Site",
+      "artifact_root": "frontend/demo/test6",
+      "model": "DA3-LARGE-1.1",
+      "processing_mode": "precomputed",
+      "representation": "mesh/glb",
+      "source_video": "Not available in repository artifact",
+      "duration": "Not measured",
+      "source_fps": "Not measured",
+      "processed_frames": "Not measured",
+      "processing_time": "Not measured",
+      "inference_time": "Not measured",
+      "peak_vram": "Not measured",
+      "confidence": "Not measured",
+      "coverage": "Not validated",
+      "georeference": "Not measured; local reconstruction frame",
+      "quality": "Not validated",
+      "artifacts": {
+        "glb": "model.glb",
+        "rgb": "preview.jpg",
+        "depth": null,
+        "confidence": null,
+        "poses": null,
+        "metrics": null,
+        "metadata": "viewer_metadata.json",
+        "georeference": "georeference.json"
+      }
+    },
+    {
+      "demo_id": "test7",
+      "display_name": "IGDTUW Basketball Court, Kashmere Gate",
+      "artifact_root": "frontend/demo/test7",
+      "model": "DA3-LARGE-1.1",
+      "processing_mode": "precomputed",
+      "representation": "mesh/glb",
+      "source_video": "Not available in repository artifact",
+      "duration": "Not measured",
+      "source_fps": "Not measured",
+      "processed_frames": "Not measured",
+      "processing_time": "Not measured",
+      "inference_time": "Not measured",
+      "peak_vram": "Not measured",
+      "confidence": "Not measured",
+      "coverage": "Not validated",
+      "georeference": "Not measured; local reconstruction frame",
+      "quality": "Not validated",
+      "artifacts": {
+        "glb": "model.glb",
+        "rgb": "preview.jpg",
+        "depth": null,
+        "confidence": null,
+        "poses": null,
+        "metrics": null,
+        "metadata": "viewer_metadata.json",
+        "georeference": "georeference.json"
+      }
+    }
+  ]
+}
