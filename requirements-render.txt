@@ -1,0 +1,4 @@
+# Lightweight dependencies for the Render Free demo/status API.
+# Render Free is not a supported GPU inference runtime for DRIFTX.
+fastapi>=0.115
+uvicorn[standard]>=0.30

@@ -1,6 +1,19 @@
+import { cpSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 
+const copyStaticDemos = () => ({
+  name: 'copy-static-demos',
+  closeBundle() {
+    const root = resolve(fileURLToPath(new URL('.', import.meta.url)));
+    cpSync(resolve(root, 'demo'), resolve(root, 'dist/demo'), { recursive: true });
+    cpSync(resolve(root, 'demo_manifest.json'), resolve(root, 'dist/demo_manifest.json'));
+  },
+});
+
 export default defineConfig({
+  plugins: [copyStaticDemos()],
   // Relative asset paths: the same build works at a domain root, under a
   // GitHub Pages project path (/drone-video-to-3d/) or opened offline.
   base: './',
