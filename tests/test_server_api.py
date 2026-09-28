@@ -28,6 +28,44 @@ class ServerApiTests(unittest.TestCase):
         payload = demos.json()["demos"]
         self.assertEqual([demo["demo_id"] for demo in payload], ["test3", "test6", "test7"])
 
+    def test_demo_benchmarks_merge_without_overwriting_artifact_frame_counts(self):
+        response = self.client.get("/api/demos")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        records = {demo["demo_id"]: demo for demo in payload["demos"]}
+        source = json.loads(server.DEMO_BENCHMARK_METRICS_PATH.read_text(encoding="utf-8"))["demos"]
+        expected_depth_frames = {"test3": 43, "test6": 35, "test7": 26}
+
+        for demo_id, expected in source.items():
+            demo = records[demo_id]
+            self.assertEqual(demo["benchmark"], expected)
+            self.assertEqual(demo["processed_frames"], expected_depth_frames[demo_id])
+            self.assertEqual(demo["depth_frame_count"], expected_depth_frames[demo_id])
+            self.assertEqual(demo["benchmark_frames_extracted"], 16)
+            self.assertEqual(demo["benchmark_frames_processed"], 16)
+            self.assertEqual(demo["duration"], expected["video_duration_seconds"])
+            self.assertEqual(demo["inference_time"], expected["inference_time_seconds"])
+            self.assertEqual(demo["coverage"], "Not validated")
+            self.assertIn("Not measured", demo["georeference"])
+
+        serialized = json.dumps(payload)
+        self.assertNotIn("C:\\\\", serialized)
+        self.assertNotIn(".\\\\models", serialized)
+
+    def test_missing_or_partial_optional_benchmark_values_do_not_break_demos(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            missing_path = Path(tmp) / "missing-metrics.json"
+            with patch.object(server, "DEMO_BENCHMARK_METRICS_PATH", missing_path):
+                response = self.client.get("/api/demos")
+            self.assertEqual(response.status_code, 200)
+            self.assertNotIn("benchmark", response.json()["demos"][0])
+
+        with patch.object(server, "_load_demo_benchmark_metrics", return_value={"test3": {"status": "completed"}}):
+            partial = self.client.get("/api/demos/test3")
+        self.assertEqual(partial.status_code, 200)
+        self.assertEqual(partial.json()["benchmark"], {"status": "completed"})
+        self.assertEqual(partial.json()["processed_frames"], 43)
+
     def test_each_demo_serves_declared_glb(self):
         for demo in self.client.get("/api/demos").json()["demos"]:
             self.assertTrue(demo["artifact_root"].startswith("outputs/"))

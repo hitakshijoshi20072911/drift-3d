@@ -9,6 +9,7 @@ const copyStaticDemos = () => ({
     const root = resolve(fileURLToPath(new URL('.', import.meta.url)));
     cpSync(resolve(root, 'demo'), resolve(root, 'dist/demo'), { recursive: true });
     cpSync(resolve(root, 'demo_manifest.json'), resolve(root, 'dist/demo_manifest.json'));
+    cpSync(resolve(root, '../data/demo_benchmark_metrics.json'), resolve(root, 'dist/demo_benchmark_metrics.json'));
   },
 });
 
