@@ -86,7 +86,7 @@ function parseGlb(buffer) {
   return new Promise((resolve, reject) => new GLTFLoader().parse(buffer, '', resolve, reject));
 }
 
-/** Merge every mesh of a glTF scene into one surface mesh with an unlit photo material. */
+/** Merge every triangle mesh of a glTF scene into one surface mesh with an unlit photo material. */
 function surfaceFromGltf(gltf) {
   gltf.scene.updateMatrixWorld(true);
   const meshes = [];
@@ -96,6 +96,54 @@ function surfaceFromGltf(gltf) {
   const geometry = src.geometry.clone().applyMatrix4(src.matrixWorld);
   const mat = Array.isArray(src.material) ? src.material[0] : src.material;
   return buildSurface(geometry, mat?.map ?? null, meshes.length);
+}
+
+/**
+ * Convert POINTS/LINES-only glTF reconstructions into one browser-pickable cloud.
+ * DRIFTX scene.glb exports use this representation for depth samples and camera
+ * traces, so rejecting the file when there is no triangle Mesh is incorrect.
+ */
+function pointCloudFromGltf(gltf) {
+  gltf.scene.updateMatrixWorld(true);
+  const positions = [];
+  const colors = [];
+  let hasColors = true;
+  let parts = 0;
+  const color = new THREE.Color();
+  const point = new THREE.Vector3();
+  gltf.scene.traverse(object => {
+    if (!object.isPoints && !object.isLine && !object.isLineSegments) return;
+    const position = object.geometry?.attributes?.position;
+    if (!position) return;
+    const sourceColor = object.geometry.attributes.color;
+    parts += 1;
+    for (let i = 0; i < position.count; i += 1) {
+      point.fromBufferAttribute(position, i).applyMatrix4(object.matrixWorld);
+      positions.push(point.x, point.y, point.z);
+      if (sourceColor) {
+        color.fromBufferAttribute(sourceColor, i);
+        colors.push(color.r, color.g, color.b);
+      } else {
+        hasColors = false;
+        colors.push(0.78, 0.83, 0.88);
+      }
+    }
+  });
+  if (!positions.length) return null;
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  if (hasColors) geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  const box = new THREE.Box3().setFromBufferAttribute(geometry.attributes.position);
+  const span = box.getSize(new THREE.Vector3()).length();
+  const material = new THREE.PointsMaterial({
+    size: Math.max(span / 700, 0.01),
+    sizeAttenuation: true,
+    vertexColors: hasColors,
+    color: hasColors ? 0xffffff : '#c9d4de',
+  });
+  const cloud = new THREE.Points(geometry, material);
+  cloud.userData.parts = parts;
+  return cloud;
 }
 
 function buildSurface(geometry, map, parts = 1) {
@@ -147,7 +195,11 @@ export async function loadReconstruction(source, progress) {
     const name = typeof source.model === 'string' ? source.model : source.model.name;
     const buffer = await read(source.model, `Reading ${name.split('/').pop()}`, 0, source.cloud ? 0.6 : 0.9);
     progress('Preparing the 3D model', source.cloud ? 0.62 : 0.92);
-    if (/\.(glb|gltf)$/i.test(name)) mesh = surfaceFromGltf(await parseGlb(buffer));
+    if (/\.(glb|gltf)$/i.test(name)) {
+      const gltf = await parseGlb(buffer);
+      mesh = surfaceFromGltf(gltf);
+      if (!mesh) cloud = pointCloudFromGltf(gltf);
+    }
     else {
       const geometry = new PLYLoader().parse(buffer);
       mesh = geometry.index ? buildSurface(geometry, null) : null;

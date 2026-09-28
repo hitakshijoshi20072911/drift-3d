@@ -9,6 +9,7 @@ export default defineConfig({
     chunkSizeWarningLimit: 1200,
   },
   server: {
+    allowedHosts: ['localhost', '127.0.0.1', '.manus.computer'],
     proxy: {
       '/api': process.env.DRIFTX_API_PROXY || 'http://127.0.0.1:8123',
     },
