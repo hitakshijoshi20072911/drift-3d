@@ -22,7 +22,7 @@ def build_parser() -> argparse.ArgumentParser:
     benchmark.add_argument("--output", required=True, help="Output folder for reconstruction and benchmark report.")
     benchmark.add_argument(
         "--model", default="depth-anything/DA3-LARGE-1.1",
-        help="DA3 Large 1.1 model ID or local checkpoint folder; Giant/Nested are rejected.",
+        help="DA3 model ID or local checkpoint folder; Giant/Nested are allowed for Gaussian/both modes.",
     )
     benchmark.add_argument("--device", default="auto", help="Inference device: auto, cpu, or cuda (default: auto).")
     benchmark.add_argument(

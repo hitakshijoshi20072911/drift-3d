@@ -24,10 +24,10 @@ PROFILES = {
 }
 
 
-def _validate_large_model(model: str) -> None:
-    """Reject the Giant/Nested checkpoints previously found to OOM this baseline."""
+def _validate_large_model(model: str, allow_gaussian: bool = False) -> None:
+    """Reject Giant/Nested checkpoints for baseline mode, not Gaussian mode."""
     model_text = str(model).lower()
-    if "giant" in model_text or "nested" in model_text:
+    if not allow_gaussian and ("giant" in model_text or "nested" in model_text):
         raise ValueError(
             "This benchmark is configured for DA3 Large 1.1, not a Giant/Nested checkpoint. "
             "Use depth-anything/DA3-LARGE-1.1 or a local copy of that checkpoint."
@@ -39,7 +39,7 @@ def _validate_large_model(model: str) -> None:
             model_name = str(config.get("model_name", "")).lower()
         except (OSError, json.JSONDecodeError) as exc:
             raise ValueError(f"Cannot read model configuration: {config_path}") from exc
-        if model_name and ("giant" in model_name or "nested" in model_name):
+        if not allow_gaussian and model_name and ("giant" in model_name or "nested" in model_name):
             raise ValueError(f"Local checkpoint {model_name!r} is not DA3 Large 1.1.")
 
 
@@ -343,7 +343,7 @@ def run_benchmark(
     final_tmp = None
     try:
         os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
-        _validate_large_model(model)
+        _validate_large_model(model, allow_gaussian=reconstruction_mode in {"gaussian", "both"})
         if reconstruction_mode in {"gaussian", "both"}:
             require_gaussian_capability(model)
         from driftx.ingest import extract_video_frames

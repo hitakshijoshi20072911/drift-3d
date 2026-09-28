@@ -2,7 +2,7 @@
 
 ## Before you run
 
-Run from the repository root and use the Python executable in your active virtual environment. The benchmark uses **DA3 Large 1.1**, not the Nested Giant checkpoint that caused the earlier OOM. Keep the DA3 weights outside Git.
+Run from the repository root and use the Python executable in your active virtual environment. The **baseline** benchmark uses **DA3 Large 1.1**; Gaussian mode may use an official Gaussian-capable DA3-GIANT checkpoint. Keep the DA3 weights outside Git.
 
 ### Windows PowerShell
 
@@ -30,7 +30,7 @@ python -c "import torch; print(torch.__version__, torch.cuda.is_available(), tor
 Test-Path "models\DA3_LARGE_1.1_SAFE\config.json"
 ```
 
-If you already downloaded the model, point `$MODEL` to that local DA3 Large 1.1 directory. Never point it at a Nested Giant/Large directory. You can set a specific device string (for example `cuda:0`) if needed.
+If you already downloaded the model, point `$MODEL` to that local DA3 Large 1.1 directory for baseline mode. Do not point baseline mode at a Nested Giant/Large directory; use `--reconstruction-mode gaussian` or `both` for an official Gaussian-capable checkpoint. You can set a specific device string (for example `cuda:0`) if needed.
 
 ## Reproducible smoke baseline (recommended first run)
 

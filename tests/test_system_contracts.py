@@ -5,6 +5,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from driftx.ablation import summarize_reports
+from driftx.benchmark.runner import _validate_large_model
 from driftx.doctor import run_doctor
 from driftx.models import detect_model_capabilities, require_gaussian_capability
 
@@ -24,6 +25,11 @@ class SystemContractTests(unittest.TestCase):
             path.mkdir()
             (path / "config.json").write_text(json.dumps({"gs_head": {"name": "GSDPT"}}))
             self.assertTrue(detect_model_capabilities(path).supports_gaussian)
+
+    def test_giant_is_allowed_only_for_gaussian_modes(self):
+        with self.assertRaises(ValueError):
+            _validate_large_model("DA3-GIANT-1.1")
+        _validate_large_model("DA3-GIANT-1.1", allow_gaussian=True)
 
     def test_doctor_persists_json_report(self):
         with tempfile.TemporaryDirectory() as tmp:
