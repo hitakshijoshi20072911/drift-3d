@@ -38,6 +38,7 @@ const app = {
   points: [],
   cursor: null,
   preview: null,
+  evidence: null,
   options: { baseMode: 'fit', observerHeight: 1.8, targetHeight: 1.0 },
 };
 
@@ -153,12 +154,13 @@ function showWorkspace() {
 
 async function openFiles(files) {
   $('#data-credit').hidden = true;
+  app.evidence = null;
   const picked = classifyFiles(files);
   const name = picked.folder || (picked.model ?? picked.cloud)?.name?.replace(/\.[^.]+$/, '') || 'Reconstruction';
   await loadSource(picked, name);
 }
 
-async function openUrlFolder(base, name) {
+async function openUrlFolder(base, name, evidence = null) {
   const b = base.endsWith('/') ? base : `${base}/`;
   const exists = async f => {
     const r = await fetch(b + f, { method: 'HEAD' }).catch(() => null);
@@ -170,6 +172,7 @@ async function openUrlFolder(base, name) {
   }
   const model = (await exists('model.glb')) ? `${b}model.glb` : (await exists('scene.glb')) ? `${b}scene.glb` : (await exists('mesh.ply')) ? `${b}mesh.ply` : null;
   const cloud = (await exists('point_cloud.ply')) ? `${b}point_cloud.ply` : null;
+  app.evidence = evidence;
   await loadSource({ model, cloud, json }, name);
 }
 
@@ -238,12 +241,12 @@ async function uploadAndProcess(file) {
       const button = document.createElement('button');
       button.className = 'btn demo-button';
       button.innerHTML = `<strong>${esc(demo.display_name)}</strong><small>PRECOMPUTED DEMO · ${esc(demo.demo_id)}</small>`;
-      button.addEventListener('click', () => openUrlFolder(demo.artifact_base_url, demo.display_name));
+      button.addEventListener('click', () => openUrlFolder(demo.artifact_base_url, demo.display_name, demo));
       list.appendChild(button);
     }
     if (params.get('demo')) {
       const selected = demos.find(d => d.demo_id === params.get('demo')) || demos[0];
-      openUrlFolder(selected.artifact_base_url, selected.display_name);
+      openUrlFolder(selected.artifact_base_url, selected.display_name, selected);
     }
   }
 })();
@@ -571,13 +574,19 @@ $('#profile-close').addEventListener('click', closeProfile);
 function renderQuality() {
   const q = app.quality;
   const chip = (cls, text) => (text ? `<span class="chip ${cls}">${esc(text)}</span>` : '');
+  const evidence = app.evidence?.artifacts || {};
+  const evidenceBlock = evidence.depth_preview || evidence.rgb ? `<div class="q-section">Precomputed evidence</div><div class="evidence-grid">
+    ${evidence.rgb ? `<a href="${esc(evidence.rgb)}" target="_blank" rel="noopener"><img src="${esc(evidence.rgb)}" alt="RGB reconstruction preview"><small>RGB preview</small></a>` : ''}
+    ${evidence.depth_preview ? `<a href="${esc(evidence.depth_preview)}" target="_blank" rel="noopener"><img src="${esc(evidence.depth_preview)}" alt="Depth visualization preview"><small>Depth preview · ${esc(app.evidence.depth_frame_count || '?')} frames</small></a>` : ''}
+  </div>` : '';
   $('#quality-body').innerHTML = `
     <div class="q-status"><span class="chip ${q.status.cls}">${q.status.cls === 'good' ? 'Pass' : q.status.cls === 'warn' ? 'Open checks' : q.status.cls === 'bad' ? 'Fail' : 'Info'}</span>
       <div><b>${esc(q.status.title)}</b><small>${esc(q.status.text)}</small></div></div>
     <div class="q-rows">${q.rows.map(r => `<div class="q-row" title="${esc(r.hint ?? '')}"><span class="q-label">${esc(r.label)}</span><span class="q-value">${esc(r.value)}</span>${chip(r.chip, r.chipText) || '<span></span>'}</div>`).join('')}</div>
     <div class="q-note"><b>What this means for your measurements.</b> ${esc(q.note)}</div>
     ${q.heightNote ? `<div class="q-section">Heights</div><p class="muted">${esc(q.heightNote)}</p>` : ''}
-    ${q.crs ? `<div class="q-section">Coordinate system</div><p class="muted">Exports use WGS84 latitude/longitude. The pipeline's GIS products use ${esc(q.crs)}.</p>` : ''}`;
+    ${q.crs ? `<div class="q-section">Coordinate system</div><p class="muted">Exports use WGS84 latitude/longitude. The pipeline's GIS products use ${esc(q.crs)}.</p>` : ''}
+    ${evidenceBlock}`;
 }
 
 function switchTab(name) {

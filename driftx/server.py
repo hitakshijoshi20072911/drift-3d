@@ -18,7 +18,7 @@ from driftx.benchmark import run_benchmark
 from driftx.models import detect_model_capabilities
 
 ROOT = Path(__file__).resolve().parents[1]
-FRONTEND_DEMO_ROOT = ROOT / "frontend" / "demo"
+DEMO_ROOTS = (ROOT / "outputs", ROOT / "frontend" / "demo")
 RUN_ROOT = Path(os.environ.get("DRIFTX_RUN_ROOT", ROOT / "outputs" / "api_runs")).expanduser().resolve()
 DEMO_MANIFEST_PATH = ROOT / "frontend" / "demo_manifest.json"
 ALLOWED_VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v"}
@@ -42,7 +42,7 @@ def _demo_record(demo: dict[str, Any], request: Request | None = None) -> dict[s
     demo_id = str(demo["demo_id"])
     relative_root = Path(str(demo["artifact_root"]))
     root = (ROOT / relative_root).resolve()
-    if not root.is_dir() or not root.is_relative_to(FRONTEND_DEMO_ROOT.resolve()):
+    if not root.is_dir() or not any(root.is_relative_to(allowed.resolve()) for allowed in DEMO_ROOTS):
         raise RuntimeError(f"Demo artifact root is invalid: {relative_root}")
     base = f"/api/demos/{demo_id}/artifacts/"
     record = dict(demo)
@@ -50,11 +50,12 @@ def _demo_record(demo: dict[str, Any], request: Request | None = None) -> dict[s
         "run_id": f"demo-{demo_id}",
         "status": "precomputed",
         "processing_mode": "precomputed",
-        "representation": "mesh/glb" if (root / "model.glb").is_file() else "not measured",
+        "representation": "mesh/glb" if (root / "scene.glb").is_file() or (root / "model.glb").is_file() else "not measured",
         "artifact_base_url": base,
         "artifacts": {
-            name: (base + name if value else None) for name, value in demo.get("artifacts", {}).items()
+            name: (base + value if value and name != "depth_dir" else None) for name, value in demo.get("artifacts", {}).items()
         },
+        "depth_frame_count": len(list((root / "depth_vis").glob("*.jpg"))) if (root / "depth_vis").is_dir() else 0,
         "quality": demo.get("quality", "Not validated"),
         "georeference": demo.get("georeference", "Not measured"),
     })

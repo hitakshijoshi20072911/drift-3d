@@ -507,3 +507,54 @@ The **Add / Process Video** control uploads raw video bytes to `/api/runs/upload
 - `DRIFTX_HOST` / `DRIFTX_PORT`: backend bind settings
 
 The single demo catalog is [`frontend/demo_manifest.json`](frontend/demo_manifest.json). It contains only the three existing repository demo artifact roots; no demo asset is fabricated by the API.
+
+## Precomputed demo outputs
+
+The showcase demos use the tracked output folders directly; they are not copied into a second `frontend/demo` location:
+
+| Demo | GLB | Depth evidence |
+|---|---|---|
+| `test3` | `outputs/DA3_LARGE_1.1_SAFE/scene.glb` | `outputs/DA3_LARGE_1.1_SAFE/depth_vis/*.jpg` |
+| `test6` | `outputs/DA3_LARGE_1.1_SAFEtest6/scene.glb` | `outputs/DA3_LARGE_1.1_SAFEtest6/depth_vis/*.jpg` |
+| `test7` | `outputs/DA3_LARGE_1.1_SAFEtest7/scene.glb` | `outputs/DA3_LARGE_1.1_SAFEtest7/depth_vis/*.jpg` |
+
+The previous “no point mesh, `.ply`, or `.glb`” message was caused by two path assumptions: the API restricted demo roots to `frontend/demo`, and the viewer/API looked for `model.glb` while the supplied artifacts are named `scene.glb`. Both are now corrected. A GLB is a mesh scene; a `.ply` is not required when `scene.glb` exists.
+
+### Test the precomputed models locally
+
+From the repository root, terminal 1:
+
+```powershell
+python -m driftx server --host 127.0.0.1 --port 8123
+```
+
+Check the API and all three actual files:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8123/api/health
+(Invoke-RestMethod http://127.0.0.1:8123/api/demos).demos | Format-List demo_id,artifact_root,artifacts,depth_frame_count
+curl.exe -I http://127.0.0.1:8123/api/demos/test3/artifacts/scene.glb
+curl.exe -I http://127.0.0.1:8123/api/demos/test6/artifacts/scene.glb
+curl.exe -I http://127.0.0.1:8123/api/demos/test7/artifacts/scene.glb
+curl.exe -I http://127.0.0.1:8123/api/demos/test3/artifacts/depth_vis/0000.jpg
+```
+
+Terminal 2:
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+Open the printed Vite URL. Select each precomputed demo. The viewer should load the corresponding `scene.glb`; open **Model quality** to see the linked RGB preview and first depth visualization, plus the measured depth-frame count. The existing viewer tools remain available: Photo, Height, Points, Point, Distance, Height, Area, Volume, Profile, Sight line, Note, screenshot, and report export.
+
+For a direct desktop GLB smoke test independent of the web viewer:
+
+```powershell
+python app_live.py "outputs\\DA3_LARGE_1.1_SAFE\\scene.glb"
+python app_live.py "outputs\\DA3_LARGE_1.1_SAFEtest6\\scene.glb"
+python app_live.py "outputs\\DA3_LARGE_1.1_SAFEtest7\\scene.glb"
+```
+
+The command should print the loaded path, geometry-object count, bounding-box dimensions, and diagonal before opening the trimesh window.

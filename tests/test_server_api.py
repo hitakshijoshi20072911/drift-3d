@@ -25,9 +25,16 @@ class ServerApiTests(unittest.TestCase):
 
     def test_each_demo_serves_declared_glb(self):
         for demo in self.client.get("/api/demos").json()["demos"]:
-            response = self.client.get(f"/api/demos/{demo['demo_id']}/artifacts/model.glb")
+            self.assertTrue(demo["artifact_root"].startswith("outputs/"))
+            self.assertEqual(demo["artifacts"]["glb"].rsplit("/", 1)[-1], "scene.glb")
+            response = self.client.get(f"/api/demos/{demo['demo_id']}/artifacts/scene.glb")
             self.assertEqual(response.status_code, 200)
             self.assertGreater(len(response.content), 1000)
+            for artifact in ("scene.jpg", "depth_vis/0000.jpg"):
+                evidence = self.client.get(f"/api/demos/{demo['demo_id']}/artifacts/{artifact}")
+                self.assertEqual(evidence.status_code, 200)
+                self.assertGreater(len(evidence.content), 1000)
+            self.assertGreater(demo["depth_frame_count"], 0)
 
     def test_invalid_uploads_are_rejected(self):
         wrong_extension = self.client.post(
