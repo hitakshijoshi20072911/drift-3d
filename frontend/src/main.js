@@ -71,7 +71,7 @@ const heightOf = z => (app.geo ? app.geo.height(z) : z);
 
 async function loadSource(source, datasetName) {
   if (!source.model && !source.cloud) {
-    toast('No model.glb, mesh.ply or point_cloud.ply found in what you opened.', true);
+    toast('No scene.glb, model.glb, mesh.ply or point_cloud.ply found in what you opened.', true);
     return;
   }
   $('#loading').hidden = false;
@@ -176,6 +176,19 @@ async function openUrlFolder(base, name, evidence = null) {
   await loadSource({ model, cloud, json }, name);
 }
 
+async function openRunManifest(manifest) {
+  const artifact = value => value ? (/^https?:\/\//i.test(value) ? value : apiUrl(value)) : null;
+  const model = artifact(manifest.artifacts?.glb || manifest.artifacts?.mesh);
+  const cloud = artifact(manifest.artifacts?.point_cloud || manifest.artifacts?.ply || manifest.artifacts?.gaussian_ply);
+  if (!model && !cloud) throw new Error(manifest.error || 'The processing run did not produce a readable GLB or PLY artifact.');
+  const json = {};
+  for (const [key, value] of Object.entries(manifest.artifacts || {})) {
+    if (value && /\.json$/i.test(value)) json[key] = artifact(value);
+  }
+  app.evidence = { artifacts: Object.fromEntries(Object.entries(manifest.artifacts || {}).map(([key, value]) => [key, artifact(value)])) };
+  await loadSource({ model, cloud: model ? null : cloud, json }, manifest.name || manifest.run_id || 'Processed reconstruction');
+}
+
 $('#btn-open').addEventListener('click', () => (history.state?.view === 'analysis' ? history.back() : showLanding()));
 $('#btn-resume').addEventListener('click', () => (history.state?.view === 'analysis' ? showWorkspace() : history.forward()));
 $('#folder-input').addEventListener('change', e => { const f = [...e.target.files]; e.target.value = ''; if (f.length) openFiles(f); });
@@ -208,9 +221,7 @@ async function uploadAndProcess(file) {
       status.textContent = `Processing ${file.name}… ${state.status}`;
     }
     const manifest = await apiJSON(`/api/runs/${created.run_id}/manifest`);
-    const modelUrl = manifest.artifacts?.glb || manifest.artifacts?.gaussian_ply;
-    if (!modelUrl) throw new Error(manifest.error || 'No GLB or point-cloud artifact was produced.');
-    await openUrlFolder(apiUrl(`/api/runs/${created.run_id}/artifacts/`), manifest.name || created.run_id);
+    await openRunManifest(manifest);
   } catch (error) {
     status.textContent = `Processing unavailable: ${error.message}`;
     toast(status.textContent, true);

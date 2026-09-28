@@ -69,6 +69,9 @@ class ServerApiTests(unittest.TestCase):
                 self.assertEqual(manifest["representation"], "mesh/glb")
                 self.assertIn("fallback_baseline/scene.glb", manifest["artifacts"]["glb"])
                 self.assertEqual(manifest["error"], "Gaussian unsupported")
+                artifact = self.client.get(manifest["artifacts"]["glb"])
+                self.assertEqual(artifact.status_code, 200)
+                self.assertEqual(artifact.content, b"glb")
             finally:
                 server.RUN_ROOT = old_root
 

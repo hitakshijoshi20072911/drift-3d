@@ -3,7 +3,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { PLYLoader } from 'three/examples/jsm/loaders/PLYLoader.js';
 
 const JSON_FILES = ['viewer_metadata.json', 'run_report.json', 'verification_report.json', 'georeference.json', 'gpu_usage.summary.json', 'confidence_summary.json'];
-const MODEL_FILES = ['model.glb', 'mesh.ply'];
+const MODEL_FILES = ['scene.glb', 'model.glb', 'mesh.glb', 'mesh.ply'];
 const CLOUD_FILES = ['point_cloud.ply'];
 
 /** Pick the files the viewer understands from a flat list of File objects. */
@@ -22,7 +22,7 @@ export function classifyFiles(files) {
   const get = name => byName.get(name)?.file ?? null;
   return {
     folder,
-    model: MODEL_FILES.map(get).find(Boolean) ?? [...byName.values()].map(v => v.file).find(f => /\.glb$/i.test(f.name)) ?? null,
+    model: MODEL_FILES.map(get).find(Boolean) ?? [...byName.values()].map(v => v.file).find(f => /\.(glb|gltf)$/i.test(f.name)) ?? null,
     cloud: CLOUD_FILES.map(get).find(Boolean) ?? null,
     json: Object.fromEntries(JSON_FILES.map(n => [n, get(n)]).filter(([, f]) => f)),
   };
@@ -147,7 +147,7 @@ export async function loadReconstruction(source, progress) {
     const name = typeof source.model === 'string' ? source.model : source.model.name;
     const buffer = await read(source.model, `Reading ${name.split('/').pop()}`, 0, source.cloud ? 0.6 : 0.9);
     progress('Preparing the 3D model', source.cloud ? 0.62 : 0.92);
-    if (/\.glb$/i.test(name)) mesh = surfaceFromGltf(await parseGlb(buffer));
+    if (/\.(glb|gltf)$/i.test(name)) mesh = surfaceFromGltf(await parseGlb(buffer));
     else {
       const geometry = new PLYLoader().parse(buffer);
       mesh = geometry.index ? buildSurface(geometry, null) : null;
