@@ -133,9 +133,25 @@ _JOBS: dict[str, dict[str, Any]] = {}
 _LOCK = threading.Lock()
 
 
+@app.get("/")
+def root() -> dict[str, Any]:
+    return {
+        "status": "ok",
+        "service": "driftx-api",
+        "version": app.version,
+        "environment": os.environ.get("DRIFTX_ENVIRONMENT", "local"),
+    }
+
+
 @app.get("/api/health")
 def health() -> dict[str, Any]:
-    return {"status": "ok", "service": "driftx-api", "version": app.version, "run_root": str(RUN_ROOT)}
+    return {
+        "status": "ok",
+        "service": "driftx-api",
+        "version": app.version,
+        "environment": os.environ.get("DRIFTX_ENVIRONMENT", "local"),
+        "run_root": str(RUN_ROOT),
+    }
 
 
 @app.get("/api/demos")

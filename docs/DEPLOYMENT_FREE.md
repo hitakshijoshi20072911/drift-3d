@@ -317,6 +317,24 @@ curl -fsS https://<your-service>.onrender.com/api/demos
 
 Render Free may take about a minute to wake after idle. Its local filesystem is ephemeral, so uploaded videos and generated artifacts are lost after restart, redeploy, or sleep. Do not treat it as durable storage.
 
+The repository also includes [`render.yaml`](../render.yaml), which encodes the
+same settings: root directory `.`, build command
+`pip install -r requirements-render.txt`, start command
+`uvicorn driftx.server:app --host 0.0.0.0 --port $PORT`, and health check
+`/api/health`. The verified FastAPI import path is `driftx.server:app`.
+
+Render route checks:
+
+```bash
+curl -fsS https://<your-service>.onrender.com/
+curl -fsS https://<your-service>.onrender.com/api/health
+curl -fsS https://<your-service>.onrender.com/api/demos
+```
+
+The first two responses are lightweight JSON and do not load a model or use a
+GPU. The root route returns `service: driftx-api`; the health route returns
+`status: ok` and the configured environment.
+
 ### 7.2 What not to do on Render Free
 
 Do not expect this configuration to run `driftx benchmark` successfully. The DA3 model and its ML dependencies are too large for the free CPU instance, and Render Free has no GPU. If you set `VITE_DRIFTX_API_URL` to this Render service, the viewer’s upload button may reach the API but live inference is not a supported free-tier deployment.

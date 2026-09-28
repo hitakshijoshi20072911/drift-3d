@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: driftx-api
+    runtime: python
+    rootDir: .
+    plan: free
+    buildCommand: pip install -r requirements-render.txt
+    startCommand: uvicorn driftx.server:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: DRIFTX_ENVIRONMENT
+        value: render
+      - key: DRIFTX_RUN_ROOT
+        value: /tmp/driftx-runs
+      - key: DRIFTX_MAX_UPLOAD_BYTES
+        value: "524288000"

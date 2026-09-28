@@ -16,8 +16,13 @@ class ServerApiTests(unittest.TestCase):
         cls.client = TestClient(app)
 
     def test_health_and_exactly_three_demos(self):
+        root = self.client.get("/")
+        self.assertEqual(root.status_code, 200)
+        self.assertEqual(root.json()["service"], "driftx-api")
         health = self.client.get("/api/health")
         self.assertEqual(health.status_code, 200)
+        self.assertEqual(health.json()["status"], "ok")
+        self.assertIn("environment", health.json())
         demos = self.client.get("/api/demos")
         self.assertEqual(demos.status_code, 200)
         payload = demos.json()["demos"]
