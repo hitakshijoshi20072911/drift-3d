@@ -21,6 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DEMO_ROOTS = (ROOT / "outputs", ROOT / "frontend" / "demo")
 RUN_ROOT = Path(os.environ.get("DRIFTX_RUN_ROOT", ROOT / "outputs" / "api_runs")).expanduser().resolve()
 DEMO_MANIFEST_PATH = ROOT / "frontend" / "demo_manifest.json"
+DEMO_BENCHMARK_METRICS_PATH = ROOT / "data" / "demo_benchmark_metrics.json"
 ALLOWED_VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v"}
 MAX_UPLOAD_BYTES = int(os.environ.get("DRIFTX_MAX_UPLOAD_BYTES", str(512 * 1024 * 1024)))
 
@@ -39,7 +40,23 @@ def _load_demo_manifest() -> list[dict[str, Any]]:
     return demos
 
 
-def _demo_record(demo: dict[str, Any], request: Request | None = None) -> dict[str, Any]:
+def _load_demo_benchmark_metrics() -> dict[str, dict[str, Any]]:
+    """Load optional, portable benchmark metadata without blocking demo service."""
+    try:
+        payload = json.loads(DEMO_BENCHMARK_METRICS_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    demos = payload.get("demos") if isinstance(payload, dict) else None
+    if not isinstance(demos, dict):
+        return {}
+    return {str(key): value for key, value in demos.items() if isinstance(value, dict)}
+
+
+def _demo_record(
+    demo: dict[str, Any],
+    request: Request | None = None,
+    benchmark_metrics: dict[str, dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     demo_id = str(demo["demo_id"])
     relative_root = Path(str(demo["artifact_root"]))
     root = (ROOT / relative_root).resolve()
@@ -60,6 +77,25 @@ def _demo_record(demo: dict[str, Any], request: Request | None = None) -> dict[s
         "quality": demo.get("quality", "Not validated"),
         "georeference": demo.get("georeference", "Not measured"),
     })
+    metrics_by_demo = benchmark_metrics if benchmark_metrics is not None else _load_demo_benchmark_metrics()
+    benchmark = metrics_by_demo.get(demo_id)
+    if benchmark:
+        # Preserve legacy keys for existing clients, but keep artifact preview
+        # frames separate from frames processed by the benchmark run.
+        legacy_fields = {
+            "duration": "video_duration_seconds",
+            "source_fps": "source_fps",
+            "processing_time": "total_wall_clock_seconds",
+            "inference_time": "inference_time_seconds",
+            "peak_vram": "peak_gpu_memory_mb",
+            "confidence": "mean_confidence",
+        }
+        for legacy_name, metric_name in legacy_fields.items():
+            if metric_name in benchmark and benchmark[metric_name] is not None:
+                record[legacy_name] = benchmark[metric_name]
+        record["benchmark_frames_extracted"] = benchmark.get("frames_extracted")
+        record["benchmark_frames_processed"] = benchmark.get("frames_processed")
+        record["benchmark"] = dict(benchmark)
     return record
 
 
@@ -156,14 +192,16 @@ def health() -> dict[str, Any]:
 
 @app.get("/api/demos")
 def demos() -> dict[str, Any]:
-    return {"demos": [_demo_record(demo) for demo in _load_demo_manifest()]}
+    benchmarks = _load_demo_benchmark_metrics()
+    return {"demos": [_demo_record(demo, benchmark_metrics=benchmarks) for demo in _load_demo_manifest()]}
 
 
 @app.get("/api/demos/{demo_id}")
 def demo_detail(demo_id: str) -> dict[str, Any]:
+    benchmarks = _load_demo_benchmark_metrics()
     for demo in _load_demo_manifest():
         if demo["demo_id"] == demo_id:
-            return _demo_record(demo)
+            return _demo_record(demo, benchmark_metrics=benchmarks)
     raise HTTPException(status_code=404, detail="Unknown demo_id")
 
 

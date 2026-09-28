@@ -6,6 +6,7 @@ import { classifyFiles, filesFromDrop, loadReconstruction } from './data.js';
 import { TOOLS, buildResult, liveReadout, previewGroup, disposeGroup, markers, setLineResolution } from './tools.js';
 import { ProfileChart } from './chart.js';
 import { summarizeQuality } from './quality.js';
+import { formatBenchmarkRows } from './benchmark.js';
 import { captureImage, download, stamp, toGeoJSON, toKML, toCSV, toReportHTML } from './export.js';
 
 const $ = sel => document.querySelector(sel);
@@ -113,6 +114,7 @@ async function loadSource(source, datasetName) {
     setDisplay(mesh ? 'photo' : cloud?.geometry.attributes.color ? 'photo' : 'height');
 
     renderQuality();
+    if (app.evidence?.benchmark) switchTab('quality');
     showWorkspace();
     viewer.fit();
     history.pushState({ view: 'analysis' }, '', location.pathname + location.search + '#analysis');
@@ -243,8 +245,19 @@ async function uploadAndProcess(file) {
     setApiStatus('offline — static demos', false);
   }
   if (!demos) {
-    const catalog = await fetch(`${base}demo/index.json`).then(r => (r.ok ? r.json() : null)).catch(() => null);
-    demos = catalog?.demos?.map(demo => ({ demo_id: demo.id, display_name: demo.name, artifact_base_url: `${base}demo/${demo.path}` })) || [];
+    const [catalog, benchmarkCatalog] = await Promise.all([
+      fetch(`${base}demo/index.json`).then(r => (r.ok ? r.json() : null)).catch(() => null),
+      fetch(`${base}demo_benchmark_metrics.json`).then(r => (r.ok ? r.json() : null)).catch(() => null),
+    ]);
+    const benchmarkByDemo = benchmarkCatalog?.demos || {};
+    demos = catalog?.demos?.map(demo => ({
+      demo_id: demo.id,
+      display_name: demo.name,
+      artifact_base_url: `${base}demo/${demo.path}`,
+      benchmark: benchmarkByDemo[demo.id],
+      quality: 'Not validated',
+      georeference: 'Not measured; local reconstruction frame',
+    })) || [];
   }
   if (demos.length) {
     list.hidden = false;
@@ -586,6 +599,15 @@ function renderQuality() {
   const q = app.quality;
   const chip = (cls, text) => (text ? `<span class="chip ${cls}">${esc(text)}</span>` : '');
   const evidence = app.evidence?.artifacts || {};
+  const benchmarkRows = formatBenchmarkRows(app.evidence?.benchmark);
+  const benchmarkEvidence = [
+    ['Coverage', app.evidence?.coverage || 'Not validated'],
+    ['Georeference', app.evidence?.georeference || 'Not measured'],
+  ];
+  const benchmarkBlock = benchmarkRows.length ? `<div class="q-section">Benchmark performance</div>
+    <div class="q-rows">${benchmarkRows.map(row => `<div class="q-row"><span class="q-label">${esc(row.label)}</span><span class="q-value">${esc(row.value)}</span><span></span></div>`).join('')}</div>
+    <p class="q-note">Valid depth is the share of pixels with finite positive depth; it is not geographic DSM coverage or georeferencing accuracy.</p>
+    <div class="q-rows">${benchmarkEvidence.map(([label, value]) => `<div class="q-row"><span class="q-label">${esc(label)}</span><span class="q-value">${esc(value)}</span><span></span></div>`).join('')}</div>` : '';
   const evidenceBlock = evidence.depth_preview || evidence.rgb ? `<div class="q-section">Precomputed evidence</div><div class="evidence-grid">
     ${evidence.rgb ? `<a href="${esc(evidence.rgb)}" target="_blank" rel="noopener"><img src="${esc(evidence.rgb)}" alt="RGB reconstruction preview"><small>RGB preview</small></a>` : ''}
     ${evidence.depth_preview ? `<a href="${esc(evidence.depth_preview)}" target="_blank" rel="noopener"><img src="${esc(evidence.depth_preview)}" alt="Depth visualization preview"><small>Depth preview · ${esc(app.evidence.depth_frame_count || '?')} frames</small></a>` : ''}
@@ -597,6 +619,7 @@ function renderQuality() {
     <div class="q-note"><b>What this means for your measurements.</b> ${esc(q.note)}</div>
     ${q.heightNote ? `<div class="q-section">Heights</div><p class="muted">${esc(q.heightNote)}</p>` : ''}
     ${q.crs ? `<div class="q-section">Coordinate system</div><p class="muted">Exports use WGS84 latitude/longitude. The pipeline's GIS products use ${esc(q.crs)}.</p>` : ''}
+    ${benchmarkBlock}
     ${evidenceBlock}`;
 }
 
