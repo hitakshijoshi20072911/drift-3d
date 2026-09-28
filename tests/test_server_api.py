@@ -30,6 +30,9 @@ class ServerApiTests(unittest.TestCase):
             response = self.client.get(f"/api/demos/{demo['demo_id']}/artifacts/scene.glb")
             self.assertEqual(response.status_code, 200)
             self.assertGreater(len(response.content), 1000)
+            head = self.client.head(f"/api/demos/{demo['demo_id']}/artifacts/scene.glb")
+            self.assertEqual(head.status_code, 200)
+            self.assertEqual(head.headers.get("content-type"), "model/gltf-binary")
             for artifact in ("scene.jpg", "depth_vis/0000.jpg"):
                 evidence = self.client.get(f"/api/demos/{demo['demo_id']}/artifacts/{artifact}")
                 self.assertEqual(evidence.status_code, 200)

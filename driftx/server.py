@@ -150,7 +150,7 @@ def demo_detail(demo_id: str) -> dict[str, Any]:
     raise HTTPException(status_code=404, detail="Unknown demo_id")
 
 
-@app.get("/api/demos/{demo_id}/artifacts/{filename:path}")
+@app.api_route("/api/demos/{demo_id}/artifacts/{filename:path}", methods=["GET", "HEAD"])
 def demo_artifact(demo_id: str, filename: str):
     for demo in _load_demo_manifest():
         if demo["demo_id"] == demo_id:
@@ -252,7 +252,7 @@ def run_status(run_id: str) -> dict[str, Any]:
     return {"run_id": run_id, "status": job.get("status", "not measured"), "error": job.get("error")}
 
 
-@app.get("/api/runs/{run_id}/artifacts/{filename:path}")
+@app.api_route("/api/runs/{run_id}/artifacts/{filename:path}", methods=["GET", "HEAD"])
 def run_artifact(run_id: str, filename: str):
     root = (RUN_ROOT / run_id).resolve()
     path = (root / filename).resolve()
