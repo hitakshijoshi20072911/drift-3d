@@ -49,6 +49,38 @@ class ServerApiTests(unittest.TestCase):
         )
         self.assertEqual(empty.status_code, 400)
 
+    def test_upload_size_limit_is_enforced_before_persisting(self):
+        old_limit = server.MAX_UPLOAD_BYTES
+        old_root = server.RUN_ROOT
+        with tempfile.TemporaryDirectory() as tmp:
+            server.MAX_UPLOAD_BYTES = 4
+            server.RUN_ROOT = Path(tmp)
+            try:
+                response = self.client.post(
+                    "/api/runs/upload", headers={"X-Filename": "sample.mp4"}, content=b"12345"
+                )
+                self.assertEqual(response.status_code, 413)
+                self.assertEqual(list(Path(tmp).iterdir()), [])
+            finally:
+                server.MAX_UPLOAD_BYTES = old_limit
+                server.RUN_ROOT = old_root
+
+    def test_process_is_idempotent_for_terminal_job(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            old_root = server.RUN_ROOT
+            server.RUN_ROOT = Path(tmp)
+            try:
+                run_dir = server.RUN_ROOT / "done"
+                run_dir.mkdir()
+                (run_dir / "job.json").write_text(
+                    json.dumps({"run_id": "done", "status": "completed", "input": "input.mp4"})
+                )
+                response = self.client.post("/api/runs/done/process", json={"profile": "smoke"})
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.json(), {"run_id": "done", "status": "completed"})
+            finally:
+                server.RUN_ROOT = old_root
+
     def test_gaussian_failure_uses_baseline_fallback_when_available(self):
         with tempfile.TemporaryDirectory() as tmp:
             old_root = server.RUN_ROOT

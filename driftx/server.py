@@ -22,6 +22,7 @@ DEMO_ROOTS = (ROOT / "outputs", ROOT / "frontend" / "demo")
 RUN_ROOT = Path(os.environ.get("DRIFTX_RUN_ROOT", ROOT / "outputs" / "api_runs")).expanduser().resolve()
 DEMO_MANIFEST_PATH = ROOT / "frontend" / "demo_manifest.json"
 ALLOWED_VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v"}
+MAX_UPLOAD_BYTES = int(os.environ.get("DRIFTX_MAX_UPLOAD_BYTES", str(512 * 1024 * 1024)))
 
 
 def _now() -> str:
@@ -164,14 +165,31 @@ async def upload_run(request: Request) -> JSONResponse:
     suffix = Path(filename).suffix.lower()
     if suffix not in ALLOWED_VIDEO_EXTENSIONS:
         raise HTTPException(status_code=415, detail=f"Unsupported video extension {suffix or '(missing)'}")
-    data = await request.body()
-    if not data:
-        raise HTTPException(status_code=400, detail="Uploaded video is empty")
+    declared_length = request.headers.get("content-length")
+    if declared_length:
+        try:
+            if int(declared_length) > MAX_UPLOAD_BYTES:
+                raise HTTPException(status_code=413, detail="Uploaded video exceeds the configured size limit")
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Invalid Content-Length header") from exc
     run_id = uuid.uuid4().hex[:12]
     run_dir = RUN_ROOT / run_id
     run_dir.mkdir(parents=True, exist_ok=False)
     video_path = run_dir / f"input{suffix}"
-    video_path.write_bytes(data)
+    received = 0
+    try:
+        with video_path.open("wb") as output:
+            async for chunk in request.stream():
+                received += len(chunk)
+                if received > MAX_UPLOAD_BYTES:
+                    raise HTTPException(status_code=413, detail="Uploaded video exceeds the configured size limit")
+                output.write(chunk)
+    except Exception:
+        shutil.rmtree(run_dir, ignore_errors=True)
+        raise
+    if received == 0:
+        shutil.rmtree(run_dir, ignore_errors=True)
+        raise HTTPException(status_code=400, detail="Uploaded video is empty")
     state = {"run_id": run_id, "status": "uploaded", "input": str(video_path), "created_at": _now()}
     _write_json(run_dir / "job.json", state)
     with _LOCK:
@@ -226,6 +244,8 @@ async def process_run(run_id: str, request: Request) -> JSONResponse:
         raise HTTPException(status_code=404, detail="Unknown run_id")
     body = await request.json() if request.headers.get("content-type", "").startswith("application/json") else {}
     job = json.loads((run_dir / "job.json").read_text(encoding="utf-8"))
+    if job.get("status") in {"processing", "completed", "failed"}:
+        return JSONResponse({"run_id": run_id, "status": job["status"]}, status_code=200)
     options = {**job, **body, "video": job["input"], "created_at": job.get("created_at", _now())}
     thread = threading.Thread(target=_process_job, args=(run_id, options), daemon=True)
     thread.start()

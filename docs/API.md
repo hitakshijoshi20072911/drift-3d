@@ -1,5 +1,29 @@
 # 📚 DepthAnything3 API Documentation
 
+> The DRIFTX HTTP service is the production-facing wrapper in
+> `driftx/server.py`; the model API remains available for Python integrations.
+
+## DRIFTX service operations
+
+Start the local API with:
+
+```bash
+python -m driftx server --host 127.0.0.1 --port 8123
+```
+
+The service exposes `GET /api/health`, precomputed demos under `/api/demos`,
+and the upload/process/status flow under `/api/runs`. Uploads are streamed to
+disk and capped at **512 MiB by default**. Override the cap with
+`DRIFTX_MAX_UPLOAD_BYTES`; set `DRIFTX_RUN_ROOT` to move run artifacts outside
+the repository, and set `DRIFTX_ALLOWED_ORIGINS` to a comma-separated allowlist
+for a deployed frontend. Processing is idempotent: repeated process requests
+for a processing or terminal run return its current state instead of starting
+duplicate inference jobs.
+
+For deployments behind a reverse proxy, enforce an equivalent request-body
+limit at the proxy and keep the API bound to a private interface unless
+authentication and authorization are added by the hosting environment.
+
 ## 📑 Table of Contents
 
 1. [📖 Overview](#overview)

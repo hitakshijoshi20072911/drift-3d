@@ -47,6 +47,7 @@ gs = ["gsplat @ git+https://github.com/nerfstudio-project/gsplat.git@0b4dddf04cb
 # gsplat is intentionally separate because its native extension build requires
 # a pre-installed, matching PyTorch toolchain; install it with --no-build-isolation.
 all = ["gradio>=5", "matplotlib>=3.7", "pillow>=9.0"]
+test = ["pytest>=8.0", "httpx>=0.24"]
 
 [project.scripts]
 da3 = "depth_anything_3.cli:app"
