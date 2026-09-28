@@ -8,10 +8,13 @@ import json
 import os
 import platform
 import shutil
+import subprocess
 import time
 import traceback
 from pathlib import Path
 from typing import Any
+
+from driftx.models import detect_model_capabilities, require_gaussian_capability
 
 
 PROFILES = {
@@ -114,6 +117,7 @@ def _base_report(video, output, model, device, profile, sample_fps, max_frames, 
         "alignment": [],
         "artifacts": {},
         "environment": {"python": platform.python_version(), "platform": platform.platform()},
+        "model_capabilities": detect_model_capabilities(model).to_dict(),
     }
 
 
@@ -340,6 +344,8 @@ def run_benchmark(
     try:
         os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
         _validate_large_model(model)
+        if reconstruction_mode in {"gaussian", "both"}:
+            require_gaussian_capability(model)
         from driftx.ingest import extract_video_frames
         from driftx.benchmark.streaming import (
             amp_precision, choose_memory_chunk_size, oom_fallback_size, is_cuda_oom,
@@ -480,6 +486,17 @@ def run_benchmark(
         if actual_device.startswith("cuda") and torch.cuda.is_available():
             report["peak_gpu_memory_mb"] = round(torch.cuda.max_memory_allocated(actual_device) / 1024**2, 2)
         report["total_runtime_seconds"] = time.perf_counter() - started
+        try:
+            torch_module = __import__("torch")
+            report["environment"].update({
+                "pytorch": torch_module.__version__,
+                "torch_cuda": torch_module.version.cuda,
+                "git_commit": subprocess.run(
+                    ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=False
+                ).stdout.strip() or "not measured",
+            })
+        except Exception:
+            report["environment"]["git_commit"] = "not measured"
     except Exception as exc:
         report["status"] = "not measured"
         report["error"] = f"{type(exc).__name__}: {exc}"
@@ -527,6 +544,23 @@ def run_benchmark(
             json.dumps(metrics, indent=2, sort_keys=True) + "\n", encoding="utf-8"
         )
         report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        manifest = {
+            "schema_version": 1,
+            "run_type": "driftx_benchmark",
+            "status": report["status"],
+            "git_commit": report.get("environment", {}).get("git_commit", "not measured"),
+            "model": report["model_capabilities"],
+            "configuration": {key: report.get(key) for key in (
+                "video", "output", "device", "profile", "reconstruction_mode", "sample_fps",
+                "max_frames", "process_resolution", "chunk_size", "chunk_overlap", "final_precision",
+            )},
+            "artifacts": report.get("artifacts", {}),
+            "metrics": "metrics.json",
+            "warnings": [report["error"]] if report.get("error") else [],
+        }
+        (output_path / "run_manifest.json").write_text(
+            json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
     return report
 
 

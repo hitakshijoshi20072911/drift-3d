@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DRIFTX · Team ZeroError · 3D Reconstruction</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <header id="topbar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span class="brand-name">DRIFTX</span>
+        <span class="brand-sub">Team ZeroError · 3D Reconstruction</span>
+      </div>
+      <div id="dataset" class="dataset" hidden></div>
+
+      <div class="topbar-group" id="view-controls" hidden>
+        <div class="segmented" role="group" aria-label="Display">
+          <button data-display="photo" class="active" title="Photo texture (1)">Photo</button>
+          <button data-display="height" title="Colour by height (2)">Height</button>
+          <button data-display="points" title="Point cloud (3)">Points</button>
+        </div>
+        <button class="icon-btn" id="btn-top" title="Top-down map view (T)"><svg viewBox="0 0 24 24"><path d="M12 3v18M3 12h18"/><circle cx="12" cy="12" r="3"/></svg><span>Top</span></button>
+        <button class="icon-btn" id="btn-fit" title="Fit whole model (F)"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg><span>Fit</span></button>
+      </div>
+
+      <div class="topbar-right">
+        <button class="icon-btn" id="btn-open" title="Open another reconstruction (browser Back also works)" hidden><svg viewBox="0 0 24 24"><path d="M3 7h6l2 2h10v10H3z"/></svg><span>Open another</span></button>
+        <button class="icon-btn" id="btn-screenshot" title="Save screenshot with scale and north arrow" hidden><svg viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg><span>Screenshot</span></button>
+        <div class="menu" id="export-menu" hidden>
+          <button class="icon-btn primary" id="btn-export" aria-haspopup="true"><svg viewBox="0 0 24 24"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 20h14"/></svg><span>Export</span></button>
+          <div class="menu-list" role="menu" hidden>
+            <button data-export="report" role="menuitem"><b>Analysis report</b><small>HTML with screenshot, results and model quality</small></button>
+            <button data-export="geojson" role="menuitem"><b>GeoJSON</b><small>QGIS, ArcGIS, web maps (WGS84)</small></button>
+            <button data-export="kml" role="menuitem"><b>KML</b><small>Google Earth</small></button>
+            <button data-export="csv" role="menuitem"><b>CSV</b><small>Spreadsheet of all results</small></button>
+          </div>
+        </div>
+        <button class="icon-btn" id="btn-help" title="Help and shortcuts (?)"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .9-1 1.7M12 17h.01"/></svg></button>
+      </div>
+    </header>
+
+    <nav id="toolbar" aria-label="Analysis tools" hidden>
+      <div class="tool-group-label">Inspect</div>
+      <button data-tool="point" title="Point: coordinates and height (I)"><svg viewBox="0 0 24 24"><path d="M12 21s-6-5.5-6-11a6 6 0 0 1 12 0c0 5.5-6 11-6 11z"/><circle cx="12" cy="10" r="2.2"/></svg><span>Point</span></button>
+      <div class="tool-group-label">Measure</div>
+      <button data-tool="distance" title="Distance along a path (D)"><svg viewBox="0 0 24 24"><path d="M4 18 18 4"/><circle cx="4" cy="18" r="1.8"/><circle cx="18" cy="4" r="1.8"/><path d="M8 11l1.5 1.5M11 8l1.5 1.5"/></svg><span>Distance</span></button>
+      <button data-tool="height" title="Height between two points (H)"><svg viewBox="0 0 24 24"><path d="M12 3v18M8 7l4-4 4 4M8 17l4 4 4-4"/></svg><span>Height</span></button>
+      <button data-tool="area" title="Area of a polygon (A)"><svg viewBox="0 0 24 24"><path d="M5 7l7-3 7 5-2 10H7z"/></svg><span>Area</span></button>
+      <div class="tool-group-label">Analyse</div>
+      <button data-tool="volume" title="Volume: stockpile, debris, earthwork (V)"><svg viewBox="0 0 24 24"><path d="M3 18h18M5 18l5-9 3 4 2-3 4 8"/></svg><span>Volume</span></button>
+      <button data-tool="profile" title="Elevation profile along a path (P)"><svg viewBox="0 0 24 24"><path d="M3 19h18M3 16l5-6 4 3 4-7 5 9"/></svg><span>Profile</span></button>
+      <button data-tool="los" title="Line of sight between two points (L)"><svg viewBox="0 0 24 24"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="2.8"/></svg><span>Sight line</span></button>
+      <div class="tool-group-label">Annotate</div>
+      <button data-tool="note" title="Note: label a location (N)"><svg viewBox="0 0 24 24"><path d="M5 4h14v12H9l-4 4z"/><path d="M9 9h6M9 12h4"/></svg><span>Note</span></button>
+    </nav>
+
+    <main id="stage">
+      <div id="canvas-host"></div>
+
+      <section id="landing">
+        <div class="landing-card">
+          <div class="landing-mark" aria-hidden="true"></div>
+          <h1>Explore DRIFTX reconstructions</h1>
+          <p>Inspect precomputed IGDTUW scenes, open a local run folder, or load cloud-generated artifacts. Every scene is labeled by provenance.</p>
+          <div class="landing-actions">
+            <label class="btn primary">Open output folder<input id="folder-input" type="file" webkitdirectory multiple hidden /></label>
+            <label class="btn">Choose files<input id="files-input" type="file" multiple accept=".glb,.ply,.json" hidden /></label>
+            <div id="demo-list" class="demo-list" hidden></div>
+            <button class="btn" id="btn-resume" hidden>Back to model</button>
+          </div>
+          <p class="landing-hint">or drop the folder anywhere on this page</p>
+          <details class="landing-files">
+            <summary>Which files are used?</summary>
+            <ul>
+              <li><code>model.glb</code> textured 3D model</li>
+              <li><code>point_cloud.ply</code> dense point cloud</li>
+              <li><code>georeference.json</code> real-world coordinates</li>
+              <li><code>run_report.json</code>, <code>verification_report.json</code> quality numbers</li>
+            </ul>
+          </details>
+        </div>
+      </section>
+
+      <div id="loading" hidden>
+        <div class="loading-card">
+          <div class="loading-title" id="loading-title">Loading</div>
+          <div class="progress"><div id="loading-bar"></div></div>
+          <div class="loading-detail" id="loading-detail"></div>
+        </div>
+      </div>
+
+      <div id="hud" hidden>
+        <div id="tool-hint" hidden></div>
+        <button id="compass" title="North up (click for top view)"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="18"/><path class="north" d="M20 5l5 15h-10z"/><path class="south" d="M20 35l-5-15h10z"/><text x="20" y="17.5" text-anchor="middle">N</text></svg></button>
+        <div id="legend" hidden>
+          <div class="legend-title" id="legend-title">Height</div>
+          <div class="legend-bar"></div>
+          <div class="legend-labels"><span id="legend-min"></span><span id="legend-max"></span></div>
+        </div>
+      </div>
+
+      <section id="profile-drawer" hidden>
+        <div class="drawer-head">
+          <div><b id="profile-title">Elevation profile</b> <span id="profile-summary"></span></div>
+          <button class="icon-btn" id="profile-close" title="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+        </div>
+        <canvas id="profile-canvas"></canvas>
+      </section>
+    </main>
+
+    <aside id="panel" hidden>
+      <section id="tool-card" hidden>
+        <div class="card-head">
+          <span id="tool-card-title">Tool</span>
+          <button class="link" id="tool-cancel">Cancel <kbd>Esc</kbd></button>
+        </div>
+        <p id="tool-card-help"></p>
+        <div id="tool-card-options"></div>
+        <div id="tool-card-live"></div>
+        <div class="card-actions" id="tool-card-actions" hidden>
+          <button class="btn small" id="tool-undo">Undo point <kbd>⌫</kbd></button>
+          <button class="btn small primary" id="tool-finish">Finish <kbd>Enter</kbd></button>
+        </div>
+      </section>
+
+      <div class="tabs" role="tablist">
+        <button role="tab" data-tab="results" class="active">Results <span class="count" id="results-count">0</span></button>
+        <button role="tab" data-tab="quality">Model quality</button>
+      </div>
+      <section class="tab-body" data-tab-body="results">
+        <div id="results-empty">
+          <p>Pick a tool on the left and click on the model.</p>
+          <p class="muted">Every measurement is kept here. Export them all as a report, GeoJSON, KML or CSV.</p>
+        </div>
+        <ol id="results-list"></ol>
+      </section>
+      <section class="tab-body" data-tab-body="quality" hidden>
+        <div id="quality-body"></div>
+      </section>
+    </aside>
+
+    <footer id="statusbar" hidden>
+      <div class="status-coords" id="status-coords"><span class="muted">Move over the model to read coordinates</span></div>
+      <div class="status-right">
+        <a id="data-credit" target="_blank" rel="noopener" hidden></a>
+        <div id="scalebar"><div class="scalebar-line"></div><span id="scalebar-label"></span></div>
+      </div>
+    </footer>
+
+    <div id="toast" role="status" hidden></div>
+
+    <div id="help" hidden>
+      <div class="help-card">
+        <div class="card-head"><b>How to use</b><button class="icon-btn" id="help-close" title="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+        <div class="help-grid">
+          <div>
+            <h3>Navigate</h3>
+            <p><kbd>Left-drag</kbd> rotate · <kbd>Right-drag</kbd> pan · <kbd>Scroll</kbd> zoom</p>
+            <p><kbd>T</kbd> top view · <kbd>F</kbd> fit model · <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> photo / height / points</p>
+            <h3>Measure</h3>
+            <p>Choose a tool, then <b>click</b> on the model. Paths and polygons: <kbd>Enter</kbd> or double-click to finish, <kbd>⌫</kbd> to undo a point, <kbd>Esc</kbd> to cancel.</p>
+          </div>
+          <div>
+            <h3>Tools</h3>
+            <ul>
+              <li><kbd>I</kbd> <b>Point</b> lat/lon, MGRS, UTM, height</li>
+              <li><kbd>D</kbd> <b>Distance</b> ground and 3D length of a path</li>
+              <li><kbd>H</kbd> <b>Height</b> ground to top of a structure</li>
+              <li><kbd>A</kbd> <b>Area</b> flat and surface area, perimeter</li>
+              <li><kbd>V</kbd> <b>Volume</b> material above / below a base fitted to the outline</li>
+              <li><kbd>P</kbd> <b>Profile</b> elevation chart, climb and slope</li>
+              <li><kbd>L</kbd> <b>Sight line</b> can one position see another?</li>
+              <li><kbd>N</kbd> <b>Note</b> label a location</li>
+            </ul>
+          </div>
+        </div>
+        <p class="muted help-note">Distances, heights, areas and volumes are measured inside the model and are consistent with each other. Absolute positions depend on the drone GPS; see <b>Model quality</b> for the expected offset.</p>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

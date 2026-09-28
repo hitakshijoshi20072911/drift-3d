@@ -49,6 +49,15 @@ def build_parser() -> argparse.ArgumentParser:
     benchmark.add_argument("--auto-memory", action=argparse.BooleanOptionalAction, default=True,
                            help="Choose a conservative initial window from free VRAM (default: on); OOM retries remain enabled.")
 
+    doctor = subparsers.add_parser("doctor", help="Check local runtime and model prerequisites.")
+    doctor.add_argument("--json", action="store_true", help="Print the complete machine-readable report.")
+    doctor.add_argument("--model", default=None, help="Optional checkpoint path or model ID to inspect.")
+    test = subparsers.add_parser("test", help="Run the CPU-safe DRIFTX test suite.")
+    test.add_argument("-k", default=None, help="Optional pytest selection expression.")
+    ablation = subparsers.add_parser("ablation", help="Summarize existing run reports without fabricating metrics.")
+    ablation.add_argument("--reports", nargs="+", required=True, help="Paths to run_report.json files.")
+    ablation.add_argument("--output", required=True, help="Directory for ablation_summary.json/csv.")
+
     return parser
 
 
@@ -56,6 +65,23 @@ def main(argv: list[str] | None = None) -> int:
     """Run the DRIFTX product CLI."""
     parser = build_parser()
     args = parser.parse_args(argv)
+    if args.command == "doctor":
+        from driftx.doctor import print_doctor, run_doctor
+        report = run_doctor(model=args.model)
+        print_doctor(report, as_json=args.json)
+        return 0 if report["status"] != "FAIL" else 1
+    if args.command == "test":
+        import subprocess
+        command = [__import__("sys").executable, "-m", "pytest", "-q", "tests"]
+        if args.k:
+            command += ["-k", args.k]
+        return subprocess.call(command)
+    if args.command == "ablation":
+        from driftx.ablation import summarize_reports
+        result = summarize_reports(args.reports, args.output)
+        print(f"DRIFTX ablation status: {result['status']}")
+        print(f"Summary: {Path(args.output).resolve() / 'ablation_summary.json'}")
+        return 0 if result["status"] == "completed" else 1
     if args.command == "benchmark":
         from driftx.benchmark import run_benchmark
 

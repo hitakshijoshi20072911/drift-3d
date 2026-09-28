@@ -1,0 +1,9 @@
+{
+  "brand": "DRIFTX",
+  "team": "Team ZeroError",
+  "demos": [
+    {"id":"test3","name":"IGDTUW COE Lab & New Building Road","path":"test3/"},
+    {"id":"test6","name":"Anveshan Foundation Construction Site","path":"test6/"},
+    {"id":"test7","name":"IGDTUW Basketball Court, Kashmere Gate","path":"test7/"}
+  ]
+}
