@@ -1,560 +1,520 @@
-# DRIFTX
+<h1 align="center">DRIFTX</h1>
 
-**AI-enabled, georeferenced 3D reconstruction from a single UAV flight.**
+<p align="center"><strong>Single-pass UAV video to georeferenced 3D reconstruction</strong></p>
 
-[![SIH 2026](https://img.shields.io/badge/Smart%20India%20Hackathon-2026-0b6e4f)](https://www.sih.gov.in/)
-[![Problem Statement](https://img.shields.io/badge/PS-26158-1f6feb)](https://www.sih.gov.in/)
-[![Team ZeroError](https://img.shields.io/badge/team-ZeroError-111827)](#team)
+<p align="center">
+  <a href="output_figures/three_video/fig07_rgb_depth_confidence.png"><img src="output_figures/three_video/fig07_rgb_depth_confidence.png" alt="RGB, depth, and confidence reconstruction evidence" width="820"></a>
+</p>
 
-DRIFTX turns one continuous drone video, with limited views and optional flight metadata, into a measurable 3D representation for inspection, disaster response, mapping, and infrastructure analysis. It is designed for the **Smart India Hackathon 2026** problem statement **26158: “Single-Pass Drone Video to Accurate 3D Model Generation System”**, submitted under **Robotics & Drones** for **NTRO**.
+<p align="center">
+  <a href="https://www.sih.gov.in/"><img src="https://img.shields.io/badge/Smart%20India%20Hackathon-2026-0b6e4f" alt="Smart India Hackathon 2026"></a>
+  <a href="https://www.sih.gov.in/"><img src="https://img.shields.io/badge/Problem%20Statement-26158-1f6feb" alt="Problem Statement 26158"></a>
+  <a href="#team"><img src="https://img.shields.io/badge/Team-ZeroError-111827" alt="Team ZeroError"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache--2.0-2f855a" alt="Apache 2.0 license"></a>
+</p>
 
-> **One pass + limited views → complete 3D geometry.**
+<p align="center">
+  <a href="https://youtu.be/SbHBuNRiBy0?si=YY_6_MCjsUT28tbU">Demo Video</a> ·
+  <a href="https://driftx-3d.netlify.app">3D GIS Mapping</a> ·
+  <a href="https://drift-ai-ml-platform-eta.vercel.app">DRIFTX Platform</a> ·
+  <a href="https://unified-drift.vercel.app/">Unified DRIFTX</a> ·
+  <a href="https://drift-mount-sensor.vercel.app">Mounted Sensor</a> ·
+  <a href="https://drift-railway-monitoringfinal.vercel.app">Ground Sensor</a> ·
+  <a href="https://drive.google.com/drive/folders/1Q0B5aicu5Dfpc6XMTm1Ab7SFssd3LbT4?usp=sharing">3D Evidence</a> ·
+  <a href="https://drive.google.com/drive/folders/1PHKRjv1DuH13bNDnd8J1dq7mxk00dccJ?usp=sharing">Three-video Results</a>
+</p>
 
-## Why DRIFTX
+<p align="center"><em>One flight + limited views → bounded processing → inspectable 3D geometry.</em></p>
 
-Conventional aerial mapping commonly depends on high image overlap, repeated flights, hundreds of frames, and long processing cycles. That workflow is difficult to use when a disaster zone, damaged structure, or inaccessible terrain allows only one safe flight.
+DRIFTX converts a continuous UAV video into a temporally ordered, quality-filtered frame stream; estimates depth and camera geometry with a frozen **Depth Anything 3 (DA3)** backbone; aligns overlapping local reconstructions with confidence-weighted **Sim(3)** transforms; and exports a global scene for inspection.
 
-DRIFTX is designed around that constraint:
+The project targets the Smart India Hackathon 2026 **Problem Statement 26158: “Single-Pass Drone Video to Accurate 3D Model Generation System”** under **Robotics & Drones** for **NTRO**.
 
-- **One flight is enough:** a continuous UAV video replaces a large planned image set.
-- **Video becomes structured data:** frame extraction and quality filtering produce a usable image sequence.
-- **Geometry is recovered:** camera pose and depth are estimated before reconstruction.
-- **The result is decision-ready:** point clouds, meshes, textures, and 3D assets can be inspected and measured.
-- **Real-world context is retained:** GPS/IMU metadata can be fused with the visual trajectory for scale and georeferencing.
+> **Accuracy note:** the repository contains measured runtime, memory, artifact, and reconstruction diagnostics. The proposal target of **≤1 m spatial accuracy**, **<15 minutes for a 10-minute video**, and full visible-scene coverage requires independent surveyed checkpoints/reference geometry; it is not a universal guarantee.
 
-The target described by the project proposal is **≤1 m spatial accuracy** and **under 15 minutes for a 10-minute video**, with full visible-scene coverage. These are engineering targets, not a guarantee for every scene or hardware configuration.
+## Contents
 
-## Pipeline
+- [Problem and solution](#problem-and-solution)
+- [System pipeline](#system-pipeline)
+- [Repository structure](#repository-structure)
+- [Offline/local setup](#offlinelocal-setup)
+- [Run a reconstruction](#run-a-reconstruction)
+- [Run the local viewer and API](#run-the-local-viewer-and-api)
+- [Benchmark profiles and metrics](#benchmark-profiles-and-metrics)
+- [Output contract](#output-contract)
+- [Technical implementation](#technical-implementation)
+- [Multimodal vibration subsystem](#multimodal-vibration-subsystem)
+- [Applications and limitations](#applications-and-limitations)
+- [Team](#team)
+
+## Problem and solution
+
+Conventional aerial mapping often depends on repeated passes, high image overlap, large image collections, and long post-processing cycles. That is a poor fit for disaster zones, unsafe infrastructure, inaccessible terrain, and time-critical inspections where only one flight may be available.
+
+DRIFTX addresses that constraint by:
+
+- accepting one continuous moving-UAV video as the primary observation stream;
+- preserving source-frame identity and timestamps through sampling and export;
+- filtering blur, near-duplicates, low-confidence regions, and invalid geometry;
+- processing bounded overlapping frame windows instead of loading the entire video into GPU memory;
+- aligning adjacent local reconstructions using shared frames and confidence-weighted 3D correspondences;
+- exporting GLB, PLY, NPZ, camera metadata, depth/confidence visualizations, metrics, and a machine-readable run report;
+- optionally correlating spatial reconstruction with synchronized vibration-condition data.
+
+## System pipeline
+
+<p align="center">
+  <a href="output_figures/three_video/fig03_frame_pipeline.png"><img src="output_figures/three_video/fig03_frame_pipeline.png" alt="DRIFTX frame processing pipeline" width="820"></a>
+</p>
 
 ```text
-Single UAV video + GPS/IMU metadata
-                │
-                ▼
-Frame extraction → quality filtering → feature extraction
-                │
-                ▼
-Depth + camera-pose estimation
-                │
-                ▼
-SfM / MVS reconstruction → point cloud → mesh + texture
-                │
-                ▼
-Georeferencing + validation → GLB / inspection-ready 3D output
+UAV video + optional GNSS/RTK/PPK, IMU, EXIF/XMP, calibration
+                              │
+                              ▼
+CPU decode → deterministic sampling → blur/dedup/quality checks
+                              │
+                              ▼
+Depth Anything 3 → per-frame depth, rays, confidence, camera geometry
+                              │
+                              ▼
+Bounded overlapping windows → shared-frame correspondences
+                              │
+                              ▼
+Confidence-weighted Sim(3) alignment → global scene merge
+                              │
+                              ▼
+PLY / GLB / NPZ / depth views / metadata / metrics / run report
+                              │
+                              ▼
+Local API + WebGL inspection viewer
 ```
 
-### Current repository layout
+### Operating modes
 
-This checkout remains compatible with the existing upstream package and CLI. The frozen runtime
-is stored under `frozen_ml/3d/` and exposed through install-time compatibility imports;
-`app_live.py` is a lightweight GLB viewer/inspection entry point.
+- **Mode A — bounded streaming baseline:** deterministic sampling, bounded DA3 windows, overlap alignment, CPU staging, and structured export. This is the reproducible local smoke path.
+- **Mode B — survey workflow:** extends the baseline with telemetry, camera calibration, control points, checkpoints, scale recovery, and georeferencing validation.
+- **Optional Gaussian branch:** available only with a DA3 checkpoint that exposes a compatible Gaussian head and a separately compiled `gsplat` installation. The default DA3 Large 1.1 baseline is depth/pose-capable, not Gaussian-capable.
 
-| Area | Role |
+## Repository structure
+
+| Path | Responsibility |
 |---|---|
-| `frozen_ml/3d/` | Frozen third-party depth, pose, video, export, and service implementation |
-| `src/depth_anything_3/` and `src/third_party/` | Install-time compatibility import paths |
-| `driftx/` | Product namespace for ingest, preprocessing, geometry, reconstruction, georeferencing, validation, export, and benchmarking |
-| `da3_streaming/` | Sliding-window streaming inference for long sequences |
-| `app_live.py` | Local inspection of an existing `.glb` scene |
-| `assets/examples/` | Small example inputs |
-| `docs/` | Existing CLI, API, and benchmark documentation |
-| `outputs/` | Existing generated example artifacts |
+| `driftx/` | Product CLI, orchestration, streaming benchmark, reconstruction, validation, export, API, and doctor commands |
+| `frozen_ml/3d/` | Frozen model/runtime implementation retained for compatibility |
+| `src/depth_anything_3/` | Install-time compatibility import path for the DA3 package |
+| `da3_streaming/` | Sliding-window video inference utilities |
+| `frontend/` | Vite + Three.js WebGL inspection interface |
+| `scripts/` | Benchmark and figure-generation helpers |
+| `input/` | Tracked sample images and videos |
+| `outputs/` | Tracked example GLB scenes and depth visualizations |
+| `output_figures/` | Benchmark dashboards, frame pipeline, confidence, temporal, trajectory, and scaling figures |
+| `docs/` | CLI, API, benchmark, streaming design, deployment, and evidence documentation |
+| `tests/` | CPU-safe unit and integration-contract tests |
+| `cloud/` | Optional notebook workflows for larger/Gaussian experiments |
 
-The DRIFTX product namespace is scaffolded for ingest, preprocessing, reconstruction, georeferencing, validation, export, and benchmarking. The frozen model remains isolated from that product code so future phases can evolve without changing the stable inference package in place.
+## Offline/local setup
 
-## Quick start
+The following procedure runs the repository locally. The only step that needs network access is the initial installation and model-weight download. After the dependencies and checkpoint are present, inference, export, API serving, and frontend inspection run on the local machine.
 
-### Install
+### Requirements
 
-```bash
-pip install xformers "torch>=2" torchvision
-pip install -e .
-```
+- Python **3.9–3.13**; Python 3.11 is recommended.
+- Git.
+- Node.js and npm for the WebGL frontend.
+- NVIDIA GPU with a compatible CUDA-enabled PyTorch wheel for practical DA3 inference. CPU is useful for tests, CLI inspection, and API/viewer work but is not a practical path for full reconstruction.
+- Sufficient disk space for PyTorch, DA3 weights, extracted frames, and generated GLB/PLY artifacts.
 
-Optional capabilities:
+### 1. Clone and create an isolated environment
 
-```bash
-pip install --no-build-isolation \
-  git+https://github.com/nerfstudio-project/gsplat.git@0b4dddf04cb687367602c01196913cde6a743d70
-pip install -e ".[app]"   # Gradio web application
-pip install -e ".[all]"   # Gradio + figure-generation capabilities
-```
-
-`gsplat` is intentionally not part of the `all` extra because its native
-extension must be built against the already-installed PyTorch/CUDA toolchain.
-Install it separately only when needed:
+#### Linux/macOS shell
 
 ```bash
-python -m pip install --no-build-isolation \
-  "gsplat @ git+https://github.com/nerfstudio-project/gsplat.git@0b4dddf04cb687367602c01196913cde6a743d70"
+git clone https://github.com/hitakshijoshi20072911/drift-3d.git
+cd drift-3d
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
 ```
 
-In Windows PowerShell, use one line instead of Bash `\` continuations:
+#### Windows PowerShell
 
 ```powershell
-.\scripts\install_gsplat_windows.ps1
+git clone https://github.com/hitakshijoshi20072911/drift-3d.git
+cd drift-3d
+py -3.11 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
 ```
 
-The pinned `gsplat` package is a native CUDA extension. The NVIDIA driver and
-the CUDA runtime bundled inside the PyTorch wheel are not enough to compile it:
-the full NVIDIA CUDA Toolkit, including `nvcc.exe`, must be installed. You
-also need Visual Studio 2022 Build Tools with the **Desktop development with
-C++** workload. Run the helper from a **Developer PowerShell**. It detects
-`CUDA_PATH`, sets `CUDA_HOME` for the current PowerShell session, verifies
-`nvcc` and `cl.exe`, and then installs the pinned renderer. If CUDA is
-installed in a non-default location, pass it explicitly:
+### 2. Install PyTorch and DRIFTX
+
+Install a CUDA-enabled PyTorch wheel appropriate for the installed NVIDIA driver. The package name is `torch`, not `pytorch`.
+
+```bash
+# Example CUDA wheel; use the wheel matching the target machine.
+python -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+python -m pip install -e ".[figures]"
+```
+
+For a CPU-only environment used for tests and API development:
+
+```bash
+python -m pip install -e ".[figures,test]"
+```
+
+Verify the install:
+
+```bash
+python -c "import torch; print('Torch:', torch.__version__); print('CUDA available:', torch.cuda.is_available()); print('GPU:', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'none')"
+python -m driftx --help
+python -m driftx doctor --json
+```
+
+### 3. Download the DA3 Large 1.1 checkpoint
+
+Keep model weights outside Git. Download into a regular local directory so the same path can be reused offline:
+
+```bash
+python -c "from huggingface_hub import snapshot_download; snapshot_download('depth-anything/DA3-LARGE-1.1', local_dir='models/DA3_LARGE_1.1_SAFE')"
+```
+
+Set the model path for the current shell:
+
+```bash
+export MODEL_DIR="$PWD/models/DA3_LARGE_1.1_SAFE"
+```
+
+PowerShell:
 
 ```powershell
-.\scripts\install_gsplat_windows.ps1 `
-  -CudaHome "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.8"
+$env:MODEL_DIR = "$PWD\models\DA3_LARGE_1.1_SAFE"
 ```
 
-If you only want the baseline GLB benchmark, do not install `gsplat`; the
-baseline path does not need it. Gaussian mode and `--reconstruction-mode both`
-do require the CUDA Toolkit and `gsplat`.
-
-### Verify the checkout locally
-
-Run the CPU-safe checks before using a GPU benchmark or committing changes. The
-optional integration tests are skipped automatically when their visualization
-dependencies are unavailable.
+### 4. Run CPU-safe verification before inference
 
 ```bash
 python -m unittest discover -s tests -v
 python -m compileall -q driftx src frozen_ml app_live.py da3_streaming
-python -m pip install build
-python -m build --sdist --wheel --no-isolation
+python -m driftx benchmark --help
 ```
 
-The test suite exercises streaming-window coverage, overlap alignment, OOM
-fallback sizing, artifact contracts, the mocked benchmark path, and figure
-generation. A successful package build confirms that the install metadata and
-vendored compatibility packages are included. GPU inference remains a separate
-hardware-dependent validation step; use the benchmark runbook below for that
-check and preserve each generated `run_report.json`.
+These checks cover profile defaults, window coverage, overlap alignment, OOM fallback sizing, artifact contracts, mocked benchmark paths, and API contracts. They do not validate GPU quality or geographic accuracy.
 
-### Run three benchmark videos and generate figures
+## Run a reconstruction
 
-The sequential runner is configured to validate exactly `input/test3.mp4`,
-`input/test6.mp4`, and `input/test7.mp4`. Put those three input files in the
-`input/` directory before running it; the runner stops clearly if one is absent.
-Run them sequentially so GPU memory is not shared between jobs, then generate
-the eight PNG/SVG figures plus CSV/JSON summaries:
+### Reconstruct an example image folder
 
 ```bash
-python scripts/run_three_video_benchmark.py \
-  --model depth-anything/DA3-LARGE-1.1 \
+mkdir -p workspace/gallery
+python -m depth_anything_3.cli auto input/SOH \
+  --model-dir "$MODEL_DIR" \
+  --export-format glb \
+  --export-dir workspace/gallery/DRIFTX_SOH
+```
+
+The compatibility console command is also available after installation:
+
+```bash
+da3 auto input/SOH --model-dir "$MODEL_DIR" --export-format glb --export-dir workspace/gallery/DRIFTX_SOH
+```
+
+### Run the recommended smoke benchmark
+
+The smoke profile is the reproducible baseline:
+
+- sample rate: **1 FPS**;
+- total sampled-frame cap: **16**;
+- processing resolution: **504**;
+- window size: **8 frames**;
+- overlap: **2 frames**;
+- three inference windows for the 16-frame workload;
+- automatic conservative VRAM sizing and CUDA OOM retries.
+
+```bash
+python -m driftx benchmark \
+  --video input/test3.mp4 \
+  --output outputs/benchmarks/test3_smoke \
+  --model "$MODEL_DIR" \
   --device cuda \
   --profile smoke
 ```
 
-Windows PowerShell:
+Use `--device auto` to let the runtime choose an available device. Use `--device cpu` only for a functional smoke test; full DA3 reconstruction is GPU-oriented.
 
-```powershell
-.\scripts\run_three_video_benchmark.ps1 `
-  -Model "models\DA3_LARGE_1.1_SAFE" `
-  -Device cuda `
-  -Profile smoke
-```
-
-Results are written to `outputs/benchmarks/three_video/<video-name>/`, and
-figures are written to `output_figures/three_video/`. The script stops on the
-first failed benchmark and never creates figures from an incomplete report.
-
-### Reconstruct example images
+### Run a longer, higher-quality profile
 
 ```bash
-export MODEL_DIR=depth-anything/DA3-LARGE-1.1
-export GALLERY_DIR=workspace/gallery
-mkdir -p "$GALLERY_DIR"
-
-da3 auto assets/examples/SOH \
-  --model-dir "$MODEL_DIR" \
-  --export-format glb \
-  --export-dir "$GALLERY_DIR/DRIFTX_SOH"
+python -m driftx benchmark \
+  --video input/test3.mp4 \
+  --output outputs/benchmarks/test3_quality \
+  --model "$MODEL_DIR" \
+  --device cuda \
+  --profile quality \
+  --max-frames 0 \
+  --precision auto
 ```
 
-### Process a video
+Available profiles:
+
+| Profile | Sampling | Frame cap | Resolution | Window / overlap | Use |
+|---|---:|---:|---:|---:|---|
+| `smoke` | 1 FPS | 16 | 504 | 8 / 2 | Reproducible first run |
+| `balanced` | 2 FPS | All sampled | 630 | 16 / 4 | More coverage with bounded memory |
+| `quality` | 2 FPS | All sampled | 756 | 12 / 4 | Higher-detail reconstruction |
+
+For low-memory GPUs, start with `--chunk-size 8 --chunk-overlap 2`, reduce `--process-res`, or lower `--max-frames`. Run jobs sequentially so GPU memory is not shared between processes.
+
+### Process a video with the compatibility CLI
 
 ```bash
-da3 video assets/examples/robot_unitree.mp4 \
+python -m depth_anything_3.cli video input/test.mp4 \
   --fps 15 \
   --model-dir "$MODEL_DIR" \
-  --export-dir "$GALLERY_DIR/DRIFTX_VIDEO" \
+  --export-dir workspace/gallery/DRIFTX_VIDEO \
   --export-format glb
 ```
 
-The original `da3` entry point is intentionally retained for compatibility. The new `driftx` entry point exposes the DRIFTX product CLI, while the existing inference implementation remains available through `da3`. See [docs/CLI.md](docs/CLI.md) for all supported modes and [docs/API.md](docs/API.md) for Python usage.
+## Run the local viewer and API
 
-### Inspect a generated GLB
-
-```bash
-python app_live.py path/to/scene.glb
-```
-
-### Run the memory-bounded streaming benchmark
-
-`driftx benchmark` samples video on the CPU and processes the selected views in
-overlapping DA3 inference windows. `--max-frames` means the **total sampled
-frames to process**, not the size of a GPU batch; `--max-frames 0` processes all
-sampled views. Neighboring windows are aligned from their shared frames before
-they are merged into one global reconstruction. The baseline defaults to DA3
-Large 1.1 and does not require `gsplat` for the baseline.
-
-```bash
-# Keep the reproducible low-quality baseline fixed once measurements start.
-python -m driftx benchmark \
-  --video input/test.mp4 \
-  --output outputs/benchmarks/test_smoke \
-  --model depth-anything/DA3-LARGE-1.1 \
-  --device auto \
-  --profile smoke
-
-# Example long run: all sampled frames, never all views in one inference batch.
-python -m driftx benchmark \
-  --video input/test.mp4 \
-  --output outputs/benchmarks/test_streaming \
-  --model depth-anything/DA3-LARGE-1.1 \
-  --device cuda \
-  --sample-fps 2 --max-frames 0 --process-res 630 \
-  --chunk-size 16 --chunk-overlap 4 --precision auto
-```
-
-Profiles: `smoke` (1 FPS, 16-frame total cap, 504 resolution, window 8/overlap
-2), `balanced` (2 FPS, all sampled frames, 630 resolution, window 16/4), and
-`quality` (2 FPS, all sampled frames, 756 resolution, window 12/4). Conservative
-VRAM auto-sizing and CUDA OOM retries are enabled by default. See the
-[streaming design](docs/DRIFTX_STREAMING_DESIGN.md) and the
-[step-by-step local GPU runbook](docs/BENCHMARK_PROFILES.md) for Windows
-commands, output checks, and the sequential RTX 3050 test matrix.
-
-Outputs include `scene.glb`, `scene.ply`, root `results.npz`, `depth_vis/`,
-`frames.json`, `camera_poses.json`, `metrics.json`, and `run_report.json`. The
-report records actual measured values or **`"not measured"`** when the hardware,
-dependencies, or failed run cannot provide them; it does not fabricate GPU
-results or reconstruction-quality claims.
-
-### Benchmark the baseline against DA3's existing Gaussian branch
-
-The Gaussian path is a thin adapter over the vendored DA3 implementation; it
-does not introduce a second 3DGS system. Use separate output directories when
-comparing A and B so each `run_report.json` remains independently inspectable:
-
-```bash
-# A: existing streaming depth/point-cloud/GLB path
-python -m driftx benchmark --video input/test3.mp4 \
-  --output outputs/compare/test3_baseline --model depth-anything/DA3-LARGE-1.1 \
-  --device cuda --profile smoke --reconstruction-mode baseline
-
-# B: existing DA3 Gaussian branch -> gaussian.ply + gaussian_preview.mp4
-python -m driftx benchmark --video input/test3.mp4 \
-  --output outputs/compare/test3_gaussian --model depth-anything/DA3-LARGE-1.1 \
-  --device cuda --profile smoke --reconstruction-mode gaussian
-```
-
-To run both paths in one report, use `--reconstruction-mode both`; baseline
-artifacts stay at the output root and Gaussian artifacts are written under
-`<output>/gaussian/`. Gaussian mode requires the checkpoint's Gaussian head and
-the optional `gsplat` renderer. The reports record actual `total_runtime_seconds`,
-`peak_gpu_memory_mb`, and per-stage timings; when a dependency or GPU is
-unavailable they explicitly contain **`"not measured"`**. There is no invented
-quality score. For visual quality, open the generated `scene.glb` and
-`gaussian.ply` in the same viewer, capture one screenshot of each from the same
-view, and record qualitative observations (coverage, holes, blur, floaters) in
-your comparison notes.
-
-### Run the three-video DA3 Large 1.1 baseline on Windows/Windsurf
-
-Run these commands in the Windsurf terminal from the repository root. The
-checkpoint name used by this repository for the requested **DA3 Large 1.1
-safe version** is `depth-anything/DA3-LARGE-1.1`. Do not use the
-`DA3NESTED-GIANT-LARGE-1.1` checkpoint for this benchmark. If the weights
-are already downloaded locally, replace that value with the local checkpoint
-folder, for example `models\DA3_LARGE_1.1_SAFE`. On Windows, download into
-that folder with `local_dir` rather than relying on the Hugging Face cache's
-symlinks:
-
-```powershell
-python -c "from huggingface_hub import snapshot_download; snapshot_download('depth-anything/DA3-LARGE-1.1', local_dir='models/DA3_LARGE_1.1_SAFE')"
-```
-
-This avoids `WinError 1314` on machines where Developer Mode or administrator
-symlink privileges are not enabled.
-
-If `git pull` reports that `frozen_ml/3d/__init__.py` is an untracked file that
-would be overwritten, the previous update was downloaded but not merged. The
-file is now tracked by the repository, so remove only that identical untracked
-copy and pull again before reinstalling:
-
-```powershell
-Remove-Item -Force "frozen_ml/3d/__init__.py"
-git pull origin main
-python -m pip install -e ".[figures]"
-```
-
-Do not run the benchmark until `git pull` finishes successfully. Otherwise the
-old runner can create `input_images/` and `run_report.json` without the newer
-import and artifact fixes.
-
-### Install PyTorch correctly on Windows
-
-`nvidia-smi` only confirms that the NVIDIA driver can see the GPU. It does not
-install PyTorch inside the virtual environment. The PyTorch package name is
-**`torch`**, not `pytorch`; `pip install pytorch` intentionally fails with the
-message “The package named for PyTorch is `torch`”.
-
-Install a CUDA-enabled PyTorch wheel **before** installing DRIFTX. Use the
-official [PyTorch selector](https://pytorch.org/get-started/locally/) for the
-current stable CUDA wheel. For example, a current CUDA 12.8 wheel can be
-installed with:
-
-```powershell
-python -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
-```
-
-If the selector gives a different CUDA index, use its command instead. Do not
-install the unrelated `pytorch` package from PyPI, and do not use Bash `\`
-line-continuation characters in PowerShell.
-
-Verify the installation before continuing:
-
-```powershell
-python -c "import torch; print('Torch:', torch.__version__); print('CUDA available:', torch.cuda.is_available()); print('CUDA runtime:', torch.version.cuda); print('GPU:', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'none')"
-```
-
-The command must print `CUDA available: True` for a GPU benchmark. If it prints
-`False`, reinstall the CUDA wheel selected by the official PyTorch page and
-check that `python -m pip --version` points inside `.venv`.
-
-```powershell
-git pull origin main
-py -3.11 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-python -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
-python -m pip install "addict>=2.4.0"
-python -m pip install -e ".[figures]"
-
-# Required preflight: this must print a path inside the active .venv.
-python -c "import depth_anything_3; print(depth_anything_3.__file__)"
-
-$env:MODEL_DIR = "models\DA3_LARGE_1.1_SAFE"
-$env:DEVICE = "cuda"        # use "cpu" only if CUDA is unavailable
-
-python -m driftx benchmark --video "input/test3.mp4" `
-  --output "outputs/benchmarks/test3" --model $env:MODEL_DIR `
-  --device $env:DEVICE --sample-fps 1.0 --max-frames 16 --process-res 504
-
-python -m driftx benchmark --video "input/test6.mp4" `
-  --output "outputs/benchmarks/test6" --model $env:MODEL_DIR `
-  --device $env:DEVICE --sample-fps 1.0 --max-frames 16 --process-res 504
-
-python -m driftx benchmark --video "input/test7.mp4" `
-  --output "outputs/benchmarks/test7" --model $env:MODEL_DIR `
-  --device $env:DEVICE --sample-fps 1.0 --max-frames 16 --process-res 504
-```
-
-The three videos must exist in your local checkout; large video files are not
-required to be committed to Git. Each run writes its report and artifacts to
-its own directory:
-
-```text
-outputs/benchmarks/
-├── test3/run_report.json
-├── test3/input_images/
-├── test3/scene.glb
-├── test3/scene.ply
-├── test3/exports/mini_npz/results.npz
-├── test6/...
-└── test7/...
-```
-
-`input_images/` is created during frame extraction. The model must finish
-successfully before `scene.glb`, `scene.ply`,
-`exports/mini_npz/results.npz`, and `depth_vis/` are written. If only
-`input_images/` and `run_report.json` exist, open `run_report.json` and inspect
-`error` and `error_traceback`; the run did not reach inference or export.
-
-After all three runs finish, generate the documentation package:
-
-```powershell
-python -m driftx.figures `
-  --results-root "outputs/benchmarks" `
-  --output "output_figures"
-```
-
-This creates eight PNG and SVG figures plus `baseline_summary.csv` and
-`baseline_summary.json` in `output_figures`:
-
-```text
-output_figures/
-├── fig01_performance_dashboard.png/.svg
-├── fig02_runtime_breakdown.png/.svg
-├── fig03_frame_pipeline.png/.svg
-├── fig04_confidence_distribution.png/.svg
-├── fig05_temporal_quality.png/.svg
-├── fig06_camera_trajectory.png/.svg
-├── fig07_rgb_depth_confidence.png/.svg
-├── fig08_runtime_scaling.png/.svg
-├── baseline_summary.csv
-└── baseline_summary.json
-```
-
-The figures are diagnostic baseline documentation only. They do not claim
-spatial accuracy, improvement, or a runtime target unless those facts are
-actually measured in the generated reports.
-
-## Applications and impact
-
-DRIFTX is aimed at rapid spatial intelligence where repeat inspection is expensive, slow, or unsafe:
-
-- **Disaster management:** damage, debris, landslide, flood, and post-earthquake assessment.
-- **Infrastructure inspection:** roads, bridges, buildings, and asset-condition monitoring.
-- **Urban planning:** 3D city mapping and digital-twin inputs.
-- **Archaeology and terrain:** rapid site documentation and discovery in difficult-to-access areas.
-- **Aerial inspection:** measurement-ready geometry from a single mission.
-
-The wider proposal also explores multimodal sensing with GPS, thermal data, and an ESP32/MPU-based vibration monitor. Its proposed event logic uses 200 Hz sampling, RMS/peak features, baseline comparison, timestamped records, and persistent high-vibration windows. Those capabilities are part of the product direction and should not be interpreted as already wired into this repository unless the relevant implementation is present.
-
-## Feasibility and roadmap
-
-The concept is designed to work with existing drone hardware and a cloud-compatible deployment model, avoiding a requirement for new flight equipment. Key production concerns are processing cost, blur and lighting, occlusion, telemetry accuracy, data security, and reliable validation.
-
-Planned expansion areas include:
-
-1. Robust video ingest and scene-quality checks.
-2. GPS/IMU fusion, scale estimation, and georeferencing.
-3. Accuracy and completeness validation with benchmark reports.
-4. Secure dashboard delivery for measurement and collaboration.
-5. Optional NeRF / 3D Gaussian Splatting export for higher-fidelity viewing.
-6. Live data analysis, autonomous-drone support, and predictive maintenance workflows.
-
-## Team
-
-**ZeroError** — Smart India Hackathon 2026
-
-Hitakshi Joshi · Ridhima Kulashri · Mannu · Renaissance Das · Saranya Jogi · Risha Rastogi
-
-## Research and references
-
-The proposal references the following research directions and datasets:
-
-- [Depth Anything 3: Recovering the Visual Space from Any Views](https://arxiv.org/abs/2511.10647)
-- Towards Fast and Fully Automatic Drone Mapping — ACM, 2026
-- E3D-Bench — 3D geometric foundation models
-- Model-based Analysis of Multi-UAV Path Planning for Surveying
-- Postdisaster Building Damage — *Scientific Reports*, 2021
-- Accuracy and Effectiveness of Orthophotos Obtained from Low-Cost UAS Video Imagery
-- AIGC-Enhanced UAV-Based 3D Mapping and Trajectory Planning for Rapid Disaster Response — ACM, 2025
-- Datasets considered in the proposal: [DL3DV-10K](https://github.com/DL3DV-10K/DL3DV-10K), [ARKitScenes](https://github.com/apple/ARKitScenes), and [Waymo Open Dataset](https://waymo.com/open/)
-
-## Built on
-
-DRIFTX's geometry backbone is a frozen, pretrained open-source foundation model. Full attribution and license terms: see [CITATIONS.md](CITATIONS.md) and [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md). The upstream code is licensed under [Apache-2.0](LICENSE); pretrained model weights may have separate terms, including **CC BY-NC 4.0** for the default nested checkpoint. Review the upstream [repository](https://github.com/ByteDance-Seed/Depth-Anything-3) and [model card](https://huggingface.co/depth-anything/DA3NESTED-GIANT-LARGE) before redistribution or commercial use.
-
-## Repository status
-
-The DRIFTX refactor keeps the existing inference package, dependencies, licenses, model weights, generated outputs, and `da3` deployment entry point available through compatibility links. The vendored source is isolated under `frozen_ml/3d/`; DRIFTX product code lives under `driftx/`.
-
-
-## DRIFTX local end-to-end application
-
-The repository includes a real local API contract between the viewer and the DRIFTX pipeline. The API is the source of truth for the three precomputed demos, uploaded runs, run status, manifests, and generated artifacts.
+The repository includes a local FastAPI backend and a Vite/Three.js inspection interface. Precomputed demo scenes can be viewed without running new inference.
 
 ### Terminal 1 — backend
 
-```powershell
+```bash
 python -m driftx doctor --json
 python -m driftx server --host 127.0.0.1 --port 8123
 ```
 
-Verify:
+Health check:
 
-```powershell
-Invoke-RestMethod http://127.0.0.1:8123/api/health
-(Invoke-RestMethod http://127.0.0.1:8123/api/demos).demos | Select-Object demo_id,display_name,representation
+```bash
+curl http://127.0.0.1:8123/api/health
+curl http://127.0.0.1:8123/api/demos
 ```
 
 ### Terminal 2 — frontend
 
-```powershell
+```bash
 cd frontend
 npm install
 npm run dev
 ```
 
-Open the Vite URL. Demo cards call `/api/demos`; selecting a card loads its API-served GLB. The viewer retains a static demo fallback so precomputed demos remain usable when the API is offline.
+Open the Vite URL printed in the terminal. The viewer supports:
 
-The **Add / Process Video** control uploads raw video bytes to `/api/runs/upload`, starts `/api/runs/{run_id}/process` using the smoke profile and `both` reconstruction mode, polls `/api/runs/{run_id}/status`, and opens the generated artifact when available. Gaussian output is optional; if unavailable, the API records the failure and attempts the baseline GLB fallback without labeling it Gaussian.
+- precomputed demo selection;
+- GLB scene loading;
+- RGB and depth evidence inspection;
+- point, distance, height, area, volume, profile, sight-line, and note tools;
+- screenshot and report export;
+- raw video upload and asynchronous processing when the backend has model access.
 
-### API contract
+### API surface
 
 - `GET /api/health`
 - `GET /api/demos`
 - `GET /api/demos/{demo_id}`
 - `GET /api/demos/{demo_id}/artifacts/{filename}`
-- `POST /api/runs/upload` with `X-Filename: video.mp4` and raw video body
-- `POST /api/runs/{run_id}/process` with JSON options such as `{"profile":"smoke","reconstruction_mode":"both"}`
+- `POST /api/runs/upload`
+- `POST /api/runs/{run_id}/process`
 - `GET /api/runs/{run_id}/status`
 - `GET /api/runs/{run_id}/manifest`
 - `GET /api/runs/{run_id}/artifacts/{filename}`
 
-### Environment variables
+Useful environment variables:
 
-- `DRIFTX_MODEL`: default checkpoint for uploaded processing
-- `DRIFTX_RUN_ROOT`: persistent run/artifact directory
-- `DRIFTX_API_URL`: frontend API base URL for a separately deployed API
-- `DRIFTX_ALLOWED_ORIGINS`: comma-separated CORS origins
-- `DRIFTX_HOST` / `DRIFTX_PORT`: backend bind settings
+- `DRIFTX_MODEL` — default checkpoint for uploaded processing;
+- `DRIFTX_RUN_ROOT` — persistent run/artifact directory;
+- `DRIFTX_API_URL` — frontend API base URL when the backend is separate;
+- `DRIFTX_ALLOWED_ORIGINS` — comma-separated CORS origins;
+- `DRIFTX_HOST`, `DRIFTX_PORT` — backend bind settings.
 
-The single demo catalog is [`frontend/demo_manifest.json`](frontend/demo_manifest.json). It contains only the three existing repository demo artifact roots; no demo asset is fabricated by the API.
+### Inspect an existing GLB directly
 
-## Precomputed demo outputs
-
-The showcase demos use the tracked output folders directly; they are not copied into a second `frontend/demo` location:
-
-| Demo | GLB | Depth evidence |
-|---|---|---|
-| `test3` | `outputs/DA3_LARGE_1.1_SAFE/scene.glb` | `outputs/DA3_LARGE_1.1_SAFE/depth_vis/*.jpg` |
-| `test6` | `outputs/DA3_LARGE_1.1_SAFEtest6/scene.glb` | `outputs/DA3_LARGE_1.1_SAFEtest6/depth_vis/*.jpg` |
-| `test7` | `outputs/DA3_LARGE_1.1_SAFEtest7/scene.glb` | `outputs/DA3_LARGE_1.1_SAFEtest7/depth_vis/*.jpg` |
-
-The previous “no point mesh, `.ply`, or `.glb`” message was caused by two path assumptions: the API restricted demo roots to `frontend/demo`, and the viewer/API looked for `model.glb` while the supplied artifacts are named `scene.glb`. Both are now corrected. A GLB is a mesh scene; a `.ply` is not required when `scene.glb` exists.
-
-### Test the precomputed models locally
-
-From the repository root, terminal 1:
-
-```powershell
-python -m driftx server --host 127.0.0.1 --port 8123
+```bash
+python app_live.py outputs/DA3_LARGE_1.1_SAFE/scene.glb
 ```
 
-Check the API and all three actual files:
+The command reports the loaded path, geometry-object count, bounding-box dimensions, and diagonal before opening the local trimesh viewer.
 
-```powershell
-Invoke-RestMethod http://127.0.0.1:8123/api/health
-(Invoke-RestMethod http://127.0.0.1:8123/api/demos).demos | Format-List demo_id,artifact_root,artifacts,depth_frame_count
-curl.exe -I http://127.0.0.1:8123/api/demos/test3/artifacts/scene.glb
-curl.exe -I http://127.0.0.1:8123/api/demos/test6/artifacts/scene.glb
-curl.exe -I http://127.0.0.1:8123/api/demos/test7/artifacts/scene.glb
-curl.exe -I http://127.0.0.1:8123/api/demos/test3/artifacts/depth_vis/0000.jpg
+## Benchmark profiles and metrics
+
+### Measured three-video smoke baseline
+
+The repository’s measured CUDA/BF16 smoke runs use DA3 Large 1.1, 16 processed frames per video, chunk size 8, overlap 2, and three inference windows. Source videos are approximately 30 FPS and contain 991–1,706 frames.
+
+| Run | Video duration | Source frames | Wall time | Inference | Export | Throughput | Peak GPU |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `test3` | 56.87 s | 1,706 | 43.45 s | 6.02 s | 2.43 s | 0.368 frames/s | 3,879.18 MB |
+| `test6` | 44.44 s | 1,332 | 39.04 s | 4.89 s | 2.55 s | 0.410 frames/s | 3,879.18 MB |
+| `test7` | 33.07 s | 991 | 35.38 s | 4.63 s | 2.46 s | 0.452 frames/s | 3,879.18 MB |
+| **Mean** | **44.79 s** | — | **39.29 s** | **5.18 s** | **2.48 s** | **0.410 frames/s** | **3,879.18 MB** |
+
+Additional measured facts:
+
+- **48/48** selected frames processed successfully;
+- **0** CUDA OOM retries in the reported smoke runs;
+- **100% finite-depth tensor coverage** in the processed tensors;
+- output sizes were approximately **16.0 MB GLB** and **16.0 MB PLY** per run;
+- finite-depth coverage is a tensor-validity measure, not geographic scene completeness;
+- GPU memory, accuracy, and runtime vary with checkpoint, resolution, hardware, and input motion.
+
+### Longer-video reported metrics
+
+The supplied project report also records a separate three-video evaluation over **537 total frames**:
+
+| Metric | Mean | Range |
+|---|---:|---:|
+| Reprojection error | **0.543 px** | 0.532–0.554 px |
+| DSM/surface-model coverage | **85.8%** | 80.6–91.9% |
+| GPS alignment RMSE | **1.92 m** | 1.59–2.25 m |
+| Frames registered | **90.4%** | 71.2–100% |
+
+These figures belong to the supplied evaluation record and should be reproduced from the corresponding run reports before being treated as a new benchmark result.
+
+### What is not yet validated by the baseline
+
+The following require independent ground truth and are not established by a visually coherent GLB alone:
+
+- absolute spatial accuracy and the **≤1 m** target;
+- surveyed georeferencing error;
+- camera ATE/RPE against a reference trajectory;
+- depth AbsRel/RMSE/δ1 against ground-truth depth;
+- point-cloud/mesh Chamfer, RMSE, and completeness;
+- full visible-scene coverage;
+- dynamic-mask precision/recall/F1/IoU.
+
+## Output contract
+
+A successful benchmark writes a self-contained run directory similar to:
+
+```text
+outputs/benchmarks/<run-name>/
+├── input_images/                  # sampled frames
+├── scene.glb                      # inspection-ready glTF scene
+├── scene.ply                      # point-cloud export
+├── results.npz                    # root geometry arrays
+├── exports/mini_npz/results.npz   # compact array export
+├── depth_vis/                     # depth/confidence visualizations
+├── frames.json                    # source-frame and timestamp metadata
+├── camera_poses.json              # estimated camera metadata
+├── metrics.json                   # measured run metrics
+└── run_report.json                # status, timings, memory, errors, artifacts
 ```
 
-Terminal 2:
+The runner does not silently publish an incomplete scene. If inference or export fails, inspect `run_report.json`, especially `status`, `error`, and `error_traceback`. Preserve the report and artifacts for reproducibility.
 
-```powershell
-cd frontend
-npm install
-npm run dev
+## Technical implementation
+
+### Deterministic ingest and preprocessing
+
+- CPU-side video decoding keeps GPU memory focused on geometry inference.
+- Sampling retains source-frame number and timestamp.
+- Blur rejection can use Laplacian variance.
+- Near-duplicate filtering can use perceptual hash/SSIM-style comparisons.
+- Optional dynamic masking and confidence thresholds remove unreliable pixels.
+- Camera intrinsics, distortion, GNSS/RTK/PPK, IMU, EXIF/XMP, and telemetry are supported as the survey workflow evolves.
+
+### DA3 geometry backbone
+
+- The default baseline uses **Depth Anything 3 Large 1.1**.
+- The backbone is treated as frozen for the stable inference path; the project documentation describes selected-layer aerial adaptation using IGDTUW UAV frames.
+- DA3 supplies depth and per-pixel ray geometry suitable for direct 3D back-projection:
+
+```text
+P = o + D · d
 ```
 
-Open the printed Vite URL. Select each precomputed demo. The viewer should load the corresponding `scene.glb`; open **Model quality** to see the linked RGB preview and first depth visualization, plus the measured depth-frame count. The existing viewer tools remain available: Photo, Height, Points, Point, Distance, Height, Area, Volume, Profile, Sight line, Note, screenshot, and report export.
+where `o` is ray origin, `D` is predicted depth, and `d` is ray direction.
 
-For a direct desktop GLB smoke test independent of the web viewer:
+### Windowing and global alignment
 
-```powershell
-python app_live.py "outputs\\DA3_LARGE_1.1_SAFE\\scene.glb"
-python app_live.py "outputs\\DA3_LARGE_1.1_SAFEtest6\\scene.glb"
-python app_live.py "outputs\\DA3_LARGE_1.1_SAFEtest7\\scene.glb"
+- selected frames are split into bounded overlapping windows;
+- each window is reconstructed in its own local coordinate frame;
+- shared frames generate confidence-weighted 3D correspondences;
+- robust residual trimming rejects high-error matches;
+- a similarity transform `Sim(3)` maps the next local chunk into the global frame;
+- chunks merge in source-frame order;
+- insufficient or degenerate overlap causes an explicit failure rather than an incoherent export;
+- CUDA OOM recovery retries with smaller windows down to a safe floor.
+
+### Export and validation
+
+- deterministic point-cap logic limits export size;
+- CPU/memory-mapped staging avoids retaining all live inference tensors on the GPU;
+- artifact existence and report paths are checked after the run;
+- metrics are recorded as measured values or `"not measured"`; no GPU result or quality score is fabricated.
+
+## Multimodal vibration subsystem
+
+The companion condition-monitoring prototype is separate from the core visual reconstruction path. It uses an ESP32 and MPU-class three-axis IMU to measure vibration severity, compare it with a calibrated baseline, and emit persistent events.
+
+### Hardware/interface
+
+- **ESP32 Dev Module:** sampling, calibration, event logic, communication;
+- **GY-521 / MPU-class IMU:** three-axis acceleration;
+- **Prototype wiring:** `VCC → 3V3`, `GND → GND`, `SDA → GPIO21`, `SCL → GPIO22`;
+- **Mechanical mount:** rigid, repeatable coupling to the monitored asset;
+- **Receiver/dashboard:** serial records and timestamped monitoring storage.
+
+### Prototype event logic
+
+| Parameter | Prototype value |
+|---|---:|
+| Sampling rate | 200 Hz |
+| Analysis window | 200 samples / 1 second |
+| Static calibration | 600 samples |
+| Baseline RMS calibration | 1,000 samples |
+| Event trigger | RMS ≥ 0.100 g for 3 consecutive windows |
+| Event clear | RMS < 0.090 g for 3 consecutive windows |
+
+Prototype bench observations:
+
+- quiet baseline: **≈0.0047–0.0050 g RMS**;
+- light disturbance: **≈0.0384 g RMS**, peak **≈0.2972 g**;
+- strong disturbance: **≈0.3558 g RMS**, peak **≈0.6166 g**;
+- sustained high vibration: **≈0.18–0.23 g RMS**, peak **≈1.06–1.45 g**;
+- later low-vibration plateau: **≈0.0205–0.0211 g RMS**.
+
+These are prototype observations, not field-calibrated railway safety limits. The intended evidence chain is:
+
+```text
+spatial observation → vibration measurement → timestamp correlation → operator review → validation
 ```
 
-The command should print the loaded path, geometry-object count, bounding-box dimensions, and diagonal before opening the trimesh window.
+## Applications and limitations
+
+### Intended applications
+
+- disaster assessment: landslides, floods, debris, and post-earthquake inspection;
+- infrastructure inspection: roads, bridges, buildings, and asset-condition monitoring;
+- urban planning and digital-twin inputs;
+- terrain and archaeological documentation;
+- aerial inspection where a single safe flight is preferable to repeated passes;
+- future multimodal threat/context analysis using thermal, night-vision, LiDAR, GNSS, IMU, and vibration data.
+
+### Current limitations
+
+- absolute georeferencing requires synchronized telemetry, calibration, scale recovery, and independent checkpoints;
+- blur, low texture, occlusion, lighting changes, dynamic objects, and weak motion can reduce reconstruction quality;
+- the default tracked demos are **precomputed local reconstructions**, not live inference results;
+- sensor fusion and domain fine-tuning are project capabilities/roadmap items unless the corresponding local implementation and run artifacts are present;
+- Gaussian export requires a compatible checkpoint and optional native `gsplat` build;
+- reported runtime is hardware-specific and should not be generalized to a 10-minute video without a new run.
+
+## Team
+
+**ZeroError — Smart India Hackathon 2026**
+
+- Hitakshi Joshi
+- Ridhima Kulashri
+- Mannu
+- Renaissance Das
+- Saranya Jogi
+- Risha Rastogi
+
+**Institution:** Indira Gandhi Delhi Technical University for Women (IGDTUW)
+
+## License
+
+The repository is released under the Apache-2.0 license. See [`LICENSE`](LICENSE) and [`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md) for the local license files shipped with the project.
